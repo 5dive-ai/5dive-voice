@@ -89,7 +89,7 @@ else
   printf 'sk-or-test\n' > "$T/conn/key"
   out=$(run backend openrouter 2>&1)
   t_has "with a key, the switch lands" "$out" "backend: openrouter"
-  t_has "...and says plainly what now leaves the box" "$out" "leave the box"
+  t_has "...and says plainly what now leaves the box" "$out" "AUDIO and REPLY TEXT"
   t_eq "...and it reads back" "$(run backend 2>/dev/null)" "openrouter"
 
   printf '# a comment the installer wrote\nstt_model=meta/muse-voice-transcribe-1.0\nbackend=openrouter\n' > "$T/state/voice/config"
