@@ -19,6 +19,25 @@ registry to be published into first. This is the shape a third-party plugin
 author copies; voice is simply the first one to do it, in public, on our own
 plugin.
 
+## Repo layout
+
+```
+.claude-plugin/marketplace.json   the one-entry index; its plugin source is ./voice
+voice/
+  .claude-plugin/plugin.json      the plugin manifest
+  bin/voice                       the executable the `voice` verb resolves to
+```
+
+**The plugin lives in `voice/`, not at the repo root, and that is not a
+preference.** Contract §1 requires the manifest `name` to equal its *folder*
+name. A `"source": "./"` resolves the plugin to the marketplace root, whose
+folder name is the marketplace name — derived from the **repo** name — so a
+root-level plugin only installs when the plugin and the repo are named the same
+thing. Ours are deliberately not (`voice` the plugin, `5dive-voice` the repo),
+so the plugin gets its own directory and the index points at it. A publisher
+whose plugin and repo share a name can leave it at the root; naming the folder
+is the option that always works, and it is what a second plugin should copy.
+
 **Install by the qualified name, not the bare one.** `5dive plugin add voice`
 still resolves for boxes that only know the old central registry, but on a box
 that has both registered, a bare plugin name is ambiguous across marketplaces
@@ -78,16 +97,16 @@ how the rule ends up meaning nothing for the tenth.
   inert.* The installer registers what this array names and nothing else. If
   voice later ships an MCP server without adding `"mcp"` here, that server is not
   registered — and `plugin add` says so out loud rather than dropping it silently.
-- **`bin/voice`** is where the verb resolves, and 5dive picked that path, not the
-  manifest. The manifest names `voice`; it never says what to run. `5dive voice`
-  runs `bin/voice` with your argv as a vector, and only after every builtin 5dive
+- **`voice/bin/voice`** is where the verb resolves, and 5dive picked that path,
+  not the manifest. The manifest names `voice`; it never says what to run. `5dive voice`
+  runs the plugin's `bin/voice` with your argv as a vector, and only after every builtin 5dive
   command has had its chance — so a plugin cannot take `5dive task` from you.
 - **`grants`** is the consent list, not documentation. `plugin add` prints it
   back in plain English ("your microphone and speakers") and will not install
   until you agree.
 - **`trust.review: "official"`** is what makes voice installable today.
 - **`version`** is not cosmetic. The install path is keyed on it
-  (`…/cache/5dive/<marketplace>/voice/1.0.0/`), so **a change that does not bump
+  (`…/5dive/plugins/cache/<marketplace>/voice/1.0.0/`), so **a change that does not bump
   `version` cannot arrive.** Bump it in the same commit as the change, every time.
 
 ## Moving here from the central registry

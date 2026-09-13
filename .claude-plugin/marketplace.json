@@ -11,7 +11,7 @@
       "name": "voice",
       "description": "Speak with your agent and hear it talk back \u2014 local speech-to-text and text-to-speech. The reference implementation of the 5dive plugin contract: a channel-capability plugin, the shape every later channel plugin copies.",
       "category": "channel",
-      "source": "./",
+      "source": "./voice",
       "homepage": "https://github.com/5dive-ai/5dive-voice"
     }
   ]
