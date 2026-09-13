@@ -1,15 +1,26 @@
 # 5dive voice
 
-Speak to your agent and hear it talk back. Speech-to-text and text-to-speech that
-run **on your own box** — audio never leaves it.
+Speak to your agent and hear it talk back.
+
+**By default, hearing runs on your own box and the audio never leaves it.**
+Speaking is the half that was never local, and this README used to say
+otherwise: the local voice is `edge-tts`, an unofficial client for Microsoft's
+online neural voices, so the reply *text* has always gone to Microsoft. That is
+corrected below rather than quietly fixed, because a self-hoster chose this
+plugin on the strength of the old sentence.
+
+There is now a choice. `5dive voice backend openrouter` moves both halves to
+OpenRouter — more accurate, and the audio and reply text leave the box. `local`
+stays the default and nothing about an existing box changes until you say so.
 
 ## Install
 
 ```
 5dive plugin add 5dive-ai/5dive-voice     # one command, straight from this repo
 sudo 5dive-setup-voice                    # the host-level engine — you run this, not us
-5dive plugin list                         # voice 1.0.0  official  channel,verb
+5dive plugin list                         # voice 1.1.0  official  channel,verb
 5dive voice                               # the verb the plugin registers
+5dive voice backend                       # where hearing and speaking run: local
 ```
 
 That first line is the whole point of this repo. A plugin lives in its own
@@ -40,15 +51,79 @@ Not a stub. `5dive-setup-voice` installs, on your own box:
 - a Voice section appended to `projects/CLAUDE.md`, so the agent knows it can
   hear and speak.
 
-Speech never leaves the box: whisper runs locally. It is also the same thing the
-dashboard offers as the **Voice** connector — this plugin is the CLI path to it,
-for the self-hosters who have no dashboard.
+Incoming speech never leaves the box: whisper runs locally. It is also the same
+thing the dashboard offers as the **Voice** connector — this plugin is the CLI
+path to it, for the self-hosters who have no dashboard.
 
 **That engine is not in this repo and does not move with it.** It is installed as
 root, per box, by the 5dive install path. Moving a plugin to its own repo moves
 the *plugin* half only — the box-level half stays where the box installer can
 reach it. Take the box half with you and every freshly provisioned box loses the
 capability.
+
+## Where hearing and speaking run
+
+```
+5dive voice backend                      # what is in force right now
+sudo 5dive voice backend local           # the default
+sudo 5dive voice backend openrouter      # needs a key; see below
+```
+
+| | `local` (default) | `openrouter` |
+|---|---|---|
+| hearing | faster-whisper on this box, warm on :8765. **Audio never leaves.** | OpenRouter `/audio/transcriptions`. **Audio leaves the box.** |
+| speaking | `edge-tts`. **Reply text goes to Microsoft.** | OpenRouter `/audio/speech`. **Reply text goes to OpenRouter.** |
+| accuracy | whisper `small`, the weakest tier anyone benchmarks | `whisper-large-v3-turbo` by default; ~12% WER, 99+ languages |
+| cost | free | ~$0.00006 to hear a 20-second note, ~$0.0045 to speak a 300-character reply |
+| failure mode | breaks whenever Microsoft rotates its token scheme | a normal paid API |
+
+**The trade is privacy, not money.** At our shape the bill is rounding error;
+what you are deciding is whether your voice notes go to a vendor.
+
+**Reading the setting is unprivileged; changing it needs root.** That asymmetry
+is the design, not an oversight: which backend is in force is something every
+seat's transcribe wrapper reads on every utterance, while *changing* it decides
+whether this box's audio leaves it — the same class of act as `sudo
+5dive-setup-voice` itself. A non-root seat gets the `sudo` line, never a
+half-applied change.
+
+### The key
+
+`openrouter` needs an OpenRouter key, and it reuses the store the box already
+has for provider credentials — no new secret location:
+
+```
+sudo 5dive-write-connector openrouter.env <<< "OPENROUTER_API_KEY=sk-or-..."
+```
+
+If the key is missing, `5dive voice backend openrouter` **refuses**, with that
+line, rather than switching into a state that fails later. And if a key that was
+present is revoked or removed afterwards, the box **falls back to local with a
+warning and still transcribes** — the alternative is dropping a message someone
+already sent. The fallback is deliberately one-way: a box configured `local`
+never reaches the network, even with a key sitting on disk.
+
+### Models
+
+Set in `/var/lib/5dive/voice/config`; only read when the backend is `openrouter`.
+
+- `stt_model` — default `openai/whisper-large-v3-turbo`. 99+ languages,
+  **Russian among them**. `meta/muse-voice-transcribe-1.0` is the most accurate
+  option in English (3.1% streaming WER), but **Russian and Ukrainian are not
+  among its 25 validated languages** and code-switched speech scores badly on
+  it. Pick it only if your audio is English.
+- `tts_model` — default `microsoft/mai-voice-2-flash`, the official successor of
+  the service `edge-tts` scrapes.
+
+The config file is host state and deliberately does **not** live in the plugin's
+installed directory: contract §4 keys that path on the manifest version, so an
+upgrade would silently reset every box to `local`.
+
+### What is not here
+
+No streaming or realtime (OpenRouter's audio API is synchronous only), no
+diarization, and no dashboard toggle yet — the settings frame it belongs in is
+still being built. The CLI is the whole surface for now.
 
 ## Why `plugin add` does not run the setup for you
 
@@ -68,7 +143,7 @@ how the rule ends up meaning nothing for the tenth.
 "fivedive": {
   "contract": "1",
   "capabilities": ["channel", "verb"],
-  "verbs": [{"name": "voice", "summary": "talk to your agent by voice", "installs": "channel"}],
+  "verbs": [{"name": "voice", "summary": "talk to your agent by voice; pick where hearing and speaking run", "installs": "channel"}],
   "grants": ["audio-io", "telegram-token"],
   "trust": {"publisher": "5dive", "did": "did:key:5dive", "review": "official"}
 }
