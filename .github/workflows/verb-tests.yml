@@ -9,16 +9,16 @@ name: verb-tests
 on:
   pull_request:
     paths:
-      - 'bin/voice'
+      - 'voice/bin/voice'
       - 'tests/verb-backend.test.sh'
-      - '.claude-plugin/plugin.json'
+      - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
     branches: [main]
     paths:
-      - 'bin/voice'
+      - 'voice/bin/voice'
       - 'tests/verb-backend.test.sh'
-      - '.claude-plugin/plugin.json'
+      - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
 jobs:
@@ -27,9 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: the verb parses, and the dispatcher could execute it
-        run: bash -n bin/voice && bash -n tests/verb-backend.test.sh && test -x bin/voice
-      - name: the manifest is valid JSON and declares what bin/voice implements
-        run: jq -e '.fivedive.capabilities|index("verb")' .claude-plugin/plugin.json && jq -e . .claude-plugin/marketplace.json >/dev/null
+        run: bash -n voice/bin/voice && bash -n tests/verb-backend.test.sh && test -x voice/bin/voice
+      - name: the manifest is valid JSON and declares what voice/bin/voice implements
+        run: jq -e '.fivedive.capabilities|index("verb")' voice/.claude-plugin/plugin.json && jq -e . .claude-plugin/marketplace.json >/dev/null
       # Root, so the write-path arms (the refusal without a key, and the
       # config rewrite that must not duplicate the backend= line) actually run.
       - name: the backend switch refuses, writes and reads back correctly (DIVE-4439)
@@ -40,11 +40,11 @@ jobs:
       # suite that has quietly stopped grading anything.
       - name: ...and they go RED on a verb that drops the keyless refusal
         run: |
-          cp bin/voice /tmp/voice.orig
-          perl -0pi -e 's/if \[\[ "\$want" == openrouter \]\] && ! voice_openrouter_key >\/dev\/null 2>&1; then/if false; then/' bin/voice
-          grep -q 'if false; then' bin/voice || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          cp voice/bin/voice /tmp/voice.orig
+          perl -0pi -e 's/if \[\[ "\$want" == openrouter \]\] && ! voice_openrouter_key >\/dev\/null 2>&1; then/if false; then/' voice/bin/voice
+          grep -q 'if false; then' voice/bin/voice || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
           if sudo -E bash tests/verb-backend.test.sh >/dev/null 2>&1; then
-            echo "the battery passed on a verb with no keyless refusal — it grades nothing"; cp /tmp/voice.orig bin/voice; exit 1
+            echo "the battery passed on a verb with no keyless refusal — it grades nothing"; cp /tmp/voice.orig voice/bin/voice; exit 1
           fi
-          cp /tmp/voice.orig bin/voice
+          cp /tmp/voice.orig voice/bin/voice
           echo "negative control held: the battery goes red on the mutated verb"

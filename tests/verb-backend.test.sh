@@ -19,11 +19,11 @@ t_has()  { [[ "$2" == *"$3"* ]] && t_ok "$1" || t_fail "$1" "[$2] lacks [$3]"; }
 t_no()   { [[ "$2" != *"$3"* ]] && t_ok "$1" || t_fail "$1" "[$2] unexpectedly has [$3]"; }
 t_eq()   { [[ "$2" == "$3" ]] && t_ok "$1" || t_fail "$1" "want [$3] got [$2]"; }
 
-VOICE="$ROOT/bin/voice"
-[[ -x "$VOICE" ]] || { echo "bin/voice is not executable — the dispatcher would refuse it"; exit 2; }
+VOICE="$ROOT/voice/bin/voice"
+[[ -x "$VOICE" ]] || { echo "voice/bin/voice is not executable — the dispatcher would refuse it"; exit 2; }
 
 echo "== the manifest =="
-M="$ROOT/.claude-plugin/plugin.json"
+M="$ROOT/voice/.claude-plugin/plugin.json"
 command -v jq >/dev/null || { echo "jq required"; exit 2; }
 t_eq "the manifest declares the verb capability (contract §2: an undeclared surface is inert)" \
   "$(jq -r '[.fivedive.capabilities[]] | index("verb") != null' "$M")" "true"
