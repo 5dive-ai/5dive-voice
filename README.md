@@ -17,8 +17,8 @@ stays the default and nothing about an existing box changes until you say so.
 
 ```
 5dive plugin add 5dive-ai/5dive-voice     # one command, straight from this repo
-sudo 5dive-setup-voice                    # the host-level engine — you run this, not us
-5dive plugin list                         # voice 1.1.0  official  channel,verb
+sudo 5dive voice setup                    # the host-level engine — you run this, not us
+5dive plugin list                         # voice 1.2.0  official  channel,verb
 5dive voice                               # the verb the plugin registers
 5dive voice backend                       # where hearing and speaking run: local
 ```
@@ -55,9 +55,21 @@ that has both registered, a bare plugin name is ambiguous across marketplaces
 and the CLI cannot tell which copy you meant. `5dive-ai/5dive-voice` is never
 ambiguous.
 
+## The installer ships with the plugin
+
+The engine is installed by `voice/bin/5dive-setup-voice`, which is part of this
+repository and lands on your box as part of `plugin add`. Nothing has to be
+present beforehand, and `sudo 5dive voice setup` is the verb route to it — the
+same shape `browser` uses for `sudo 5dive browser setup`.
+
+Before DIVE-4495 the manifest named a bare `5dive-setup-voice`, a program written
+only by 5dive's own box installer. On a 5dive-provisioned box that worked; on any
+other box the plugin installed cleanly and its host half could not be installed at
+all, which is not a state a published plugin should be able to reach.
+
 ## What the voice runtime actually is
 
-Not a stub. `5dive-setup-voice` installs, on your own box:
+Not a stub. `sudo 5dive voice setup` installs, on your own box:
 
 - **ffmpeg** (apt) for audio conversion;
 - **faster-whisper** and **edge-tts** into `/home/claude/.venv`;
@@ -103,7 +115,7 @@ what you are deciding is whether your voice notes go to a vendor.
 is the design, not an oversight: which backend is in force is something every
 seat's transcribe wrapper reads on every utterance, while *changing* it decides
 whether this box's audio leaves it — the same class of act as `sudo
-5dive-setup-voice` itself. A non-root seat gets the `sudo` line, never a
+5dive voice setup` itself. A non-root seat gets the `sudo` line, never a
 half-applied change.
 
 ### The key

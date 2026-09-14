@@ -11,6 +11,9 @@ on:
     paths:
       - 'voice/bin/voice'
       - 'tests/verb-backend.test.sh'
+      - 'voice/bin/5dive-setup-voice'
+      - 'voice/lib/**'
+      - 'tests/verb-setup.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -18,6 +21,9 @@ on:
     paths:
       - 'voice/bin/voice'
       - 'tests/verb-backend.test.sh'
+      - 'voice/bin/5dive-setup-voice'
+      - 'voice/lib/**'
+      - 'tests/verb-setup.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -48,3 +54,48 @@ jobs:
           fi
           cp /tmp/voice.orig voice/bin/voice
           echo "negative control held: the battery goes red on the mutated verb"
+
+  # DIVE-4495. The property these arms defend is not a behaviour of the verb but
+  # a property of the SHIPPED TREE: the plugin carries its own installer, and the
+  # command the manifest names is reachable from what `plugin add` puts on a box.
+  # It is graded here because it is exactly the kind of thing that regresses by
+  # deletion — a payload dropped, a version left unbumped, a manifest reverted to
+  # the bare name — and none of those show up in the verb's own behaviour.
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the installer parses, and plugin add would ship it executable
+        run: bash -n voice/bin/5dive-setup-voice && test -x voice/bin/5dive-setup-voice && bash -n tests/verb-setup.test.sh
+      - name: every shipped payload parses as what it claims to be
+        run: |
+          for f in voice/lib/*.sh; do bash -n "$f"; done
+          python3 -m py_compile voice/lib/whisper-service.py
+      # Root, so the preflight arm (a payload missing from the tree must be
+      # refused BEFORE step 1 installs anything) actually runs instead of skipping.
+      - name: the plugin ships its own installer and the manifest can reach it (DIVE-4495)
+        run: sudo -E bash tests/verb-setup.test.sh
+      # NEGATIVE CONTROL, and it is the row itself: put the manifest back to the
+      # bare `sudo 5dive-setup-voice` — a program written only by 5dive's own box
+      # installer — and the battery must go RED. A suite that greens on that is a
+      # suite that would not have caught the defect it was written for.
+      - name: ...and it goes RED on a manifest that names the program nothing installs
+        run: |
+          cp voice/.claude-plugin/plugin.json /tmp/plugin.json.orig
+          python3 -c "import json,collections;p='voice/.claude-plugin/plugin.json';d=json.load(open(p),object_pairs_hook=collections.OrderedDict);d['fivedive']['setup']['command']='sudo 5dive-setup-voice';json.dump(d,open(p,'w'),indent=2,ensure_ascii=False)"
+          grep -q '"command": "sudo 5dive-setup-voice"' voice/.claude-plugin/plugin.json || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if sudo -E bash tests/verb-setup.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on the manifest that shipped the defect — it grades nothing"; cp /tmp/plugin.json.orig voice/.claude-plugin/plugin.json; exit 1
+          fi
+          cp /tmp/plugin.json.orig voice/.claude-plugin/plugin.json
+          echo "negative control held"
+      # The second way this regresses: the installer references a payload that
+      # was never added to voice/lib/, and nobody notices until a real box runs it.
+      - name: ...and RED when a payload the installer reads is not in the tree
+        run: |
+          mv voice/lib/whisper-service.py /tmp/ws.bak
+          if sudo -E bash tests/verb-setup.test.sh >/dev/null 2>&1; then
+            echo "the battery passed with a payload missing — it grades nothing"; mv /tmp/ws.bak voice/lib/whisper-service.py; exit 1
+          fi
+          mv /tmp/ws.bak voice/lib/whisper-service.py
+          echo "negative control held"

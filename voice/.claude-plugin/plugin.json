@@ -1,6 +1,6 @@
 {
   "name": "voice",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Speak with your agent and hear it talk back — speech-to-text and text-to-speech on your own box, or on OpenRouter if you choose.",
   "author": {
     "name": "5dive",
@@ -37,8 +37,8 @@
       "review": "official"
     },
     "setup": {
-      "hint": "voice needs a host-level engine that 5dive will not install behind your back: ffmpeg, faster-whisper and edge-tts, plus a warm transcription service on port 8765. It stays on this box by default; `sudo 5dive voice backend openrouter` moves hearing and speaking to OpenRouter.",
-      "command": "sudo 5dive-setup-voice"
+      "hint": "voice needs a host-level engine that 5dive will not install behind your back: ffmpeg, faster-whisper and edge-tts, plus a warm transcription service on port 8765. The plugin ships the installer, so this runs off the copy `plugin add` already put on your box. It stays on this box by default; `sudo 5dive voice backend openrouter` moves hearing and speaking to OpenRouter.",
+      "command": "sudo 5dive voice setup"
     }
   }
 }

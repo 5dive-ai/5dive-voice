@@ -15,7 +15,8 @@
 # otherwise here would be a stub wearing a feature's name.
 #
 # WHY THE VERB DOES NOT DEFINE THE CONFIG FORMAT. The box-level engine
-# (5dive-setup-voice, in 5dive-api) installs /usr/local/lib/5dive/voice-backend.sh
+# (bin/5dive-setup-voice, shipped beside this file since DIVE-4495) installs
+# /usr/local/lib/5dive/voice-backend.sh
 # and every wrapper sources it. This verb sources the SAME file rather than
 # reimplementing "where is the key, what is the default, when do we fall back".
 # Two definitions is how hearing and speaking end up disagreeing about where the
@@ -25,7 +26,7 @@
 set -uo pipefail
 
 VOICE_SERVICE_PORT="${VOICE_SERVICE_PORT:-8765}"
-SETUP_CMD="sudo 5dive-setup-voice"
+SETUP_CMD="sudo 5dive voice setup"
 VOICE_LIB="${VOICE_LIB:-/usr/local/lib/5dive/voice-backend.sh}"
 
 usage() {
@@ -33,6 +34,7 @@ usage() {
 5dive voice — speech-to-text and text-to-speech for your agent
 
   5dive voice                          # is the engine installed and warm?
+  sudo 5dive voice setup               # install the host engine (one time)
   5dive voice backend                  # which backend hears and speaks
   sudo 5dive voice backend local       # (default) hearing runs on this box
   sudo 5dive voice backend openrouter  # hearing and speaking run on OpenRouter
@@ -60,7 +62,7 @@ MODELS (openrouter only; edit /var/lib/5dive/voice/config)
   tts_model   default microsoft/mai-voice-2-flash — the official successor of
               the service edge-tts scrapes.
 
-Install the engine with:  sudo 5dive-setup-voice
+Install the engine with:  sudo 5dive voice setup
 USAGE
 }
 
@@ -95,7 +97,7 @@ cmd_backend() {
   esac
 
   # CHANGING the backend decides whether this box's audio leaves the box, so it
-  # is a root act — the same shape as `sudo 5dive-setup-voice`. READING it is
+  # is a root act — the same shape as `sudo 5dive voice setup`. READING it is
   # not, which is why the branch above runs unprivileged. A non-root seat gets
   # the sudo line, never a half-applied change.
   if [[ $EUID -ne 0 ]]; then
@@ -134,6 +136,34 @@ cmd_backend() {
     printf '\nHearing runs on this box. Speaking still uses edge-tts, which sends the\n'
     printf 'reply TEXT to Microsoft — that has always been true and is not new here.\n'
   fi
+}
+
+# ---- setup: the host half, shipped by this plugin (DIVE-4495) ----------
+#
+# The installer is a SIBLING FILE, not a program the box was expected to already
+# have. That is the whole of this row: until now `fivedive.setup.command` named
+# a bare `5dive-setup-voice`, which is written only by 5dive's own box installer
+# (5dive-api scripts/install/users.sh) — so the plugin installed fine and its
+# host half could not be installed at all on a box provisioned any other way.
+#
+# Routed through the VERB rather than named by absolute path, for the same
+# reason `browser` uses `sudo 5dive browser setup`: the dispatcher already finds
+# <installed-plugin-dir>/bin/voice by convention, so the manifest never has to
+# hardcode 5dive's version-keyed cache layout or the value of STATE_DIR. A path
+# in a publisher manifest is a path that breaks on the first box that moves it.
+#
+# `exec`, so the installer's exit status IS this verb's exit status — `plugin
+# setup` records rc on the installed.json entry and a swallowed failure there is
+# a box that reports setup done and is not.
+cmd_setup() {
+  local self installer
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  installer="$self/5dive-setup-voice"
+  [[ -f "$installer" ]] \
+    || die "this voice plugin is incomplete: no $installer — reinstall it: sudo 5dive plugin upgrade voice"
+  [[ -x "$installer" ]] \
+    || die "$installer is not executable — reinstall it: sudo 5dive plugin upgrade voice"
+  exec "$installer" "$@"
 }
 
 # ---- status (the default) ----------------------------------------------
@@ -197,5 +227,6 @@ case "${1:-}" in
   -h|--help|help) usage; exit 0 ;;
   "")             cmd_status ;;
   backend)        shift; cmd_backend "${1:-}" ;;
+  setup)          shift; cmd_setup "$@" ;;
   *)              printf 'unknown: 5dive voice %s (see: 5dive voice --help)\n' "$1" >&2; exit 64 ;;
 esac
