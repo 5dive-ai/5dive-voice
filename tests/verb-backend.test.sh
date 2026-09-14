@@ -37,7 +37,7 @@ t_no "the version is no longer 1.0.0 — an unbumped manifest installs nothing (
 
 echo "== without the engine installed, the verb says so instead of guessing =="
 out=$(VOICE_LIB="$T/absent.sh" "$VOICE" backend 2>&1); rc=$?
-t_has "no engine → names the install command" "$out" "sudo 5dive-setup-voice"
+t_has "no engine → names the install command" "$out" "sudo 5dive voice setup"
 t_eq "no engine → non-zero" "$rc" "1"
 t_no "no engine → does NOT invent a backend answer" "$out" "openrouter"
 
