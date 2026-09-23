@@ -14,6 +14,7 @@ on:
       - 'voice/bin/5dive-setup-voice'
       - 'voice/lib/**'
       - 'tests/verb-setup.test.sh'
+      - 'tests/verb-config.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -24,6 +25,7 @@ on:
       - 'voice/bin/5dive-setup-voice'
       - 'voice/lib/**'
       - 'tests/verb-setup.test.sh'
+      - 'tests/verb-config.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -54,6 +56,31 @@ jobs:
           fi
           cp /tmp/voice.orig voice/bin/voice
           echo "negative control held: the battery goes red on the mutated verb"
+
+  # DIVE-4875. `5dive voice config` is what the dashboard's settings form reads
+  # and writes. The arms that matter are the REFUSALS — a value the manifest does
+  # not allow must never reach the config file — and they need root for the same
+  # reason the backend arms do.
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the config battery parses
+        run: bash -n tests/verb-config.test.sh
+      - name: config reads, validates and writes atomically (DIVE-4875)
+        run: sudo -E bash tests/verb-config.test.sh
+      # NEGATIVE CONTROL: cut the string-value check out of the verb. The battery
+      # must go RED, or it is not grading the refusal it claims to.
+      - name: ...and it goes RED on a verb that drops the string-value check
+        run: |
+          cp voice/bin/voice /tmp/voice.orig
+          perl -0pi -e 's/\[\[ "\$value" =~ \$CONFIG_STRING_RE \]\] \\\n/true \\\n/' voice/bin/voice
+          grep -q 'CONFIG_STRING_RE \]\]' voice/bin/voice && { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if sudo -E bash tests/verb-config.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on a verb that writes any string — it grades nothing"; cp /tmp/voice.orig voice/bin/voice; exit 1
+          fi
+          cp /tmp/voice.orig voice/bin/voice
+          echo "negative control held"
 
   # DIVE-4495. The property these arms defend is not a behaviour of the verb but
   # a property of the SHIPPED TREE: the plugin carries its own installer, and the
