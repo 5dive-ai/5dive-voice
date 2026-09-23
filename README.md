@@ -18,7 +18,7 @@ stays the default and nothing about an existing box changes until you say so.
 ```
 5dive plugin add 5dive-ai/5dive-voice     # one command, straight from this repo
 sudo 5dive voice setup                    # the host-level engine — you run this, not us
-5dive plugin list                         # voice 1.2.0  official  channel,verb
+5dive plugin list                         # voice 1.3.0  official  channel,verb
 5dive voice                               # the verb the plugin registers
 5dive voice backend                       # where hearing and speaking run: local
 ```
@@ -136,7 +136,14 @@ never reaches the network, even with a key sitting on disk.
 
 ### Models
 
-Set in `/var/lib/5dive/voice/config`; only read when the backend is `openrouter`.
+Only read when the backend is `openrouter`. Set them with the verb rather than
+by editing the file — it validates the value and writes atomically:
+
+```
+5dive voice config                                   # every setting, as key=value
+sudo 5dive voice config set stt_model meta/muse-voice-transcribe-1.0
+sudo 5dive voice config set tts_voice nova
+```
 
 - `stt_model` — default `openai/whisper-large-v3-turbo`. 99+ languages,
   **Russian among them**. `meta/muse-voice-transcribe-1.0` is the most accurate
@@ -145,6 +152,7 @@ Set in `/var/lib/5dive/voice/config`; only read when the backend is `openrouter`
   it. Pick it only if your audio is English.
 - `tts_model` — default `microsoft/mai-voice-2-flash`, the official successor of
   the service `edge-tts` scrapes.
+- `tts_voice` — default `alloy`, a voice name the speaking model offers.
 
 The config file is host state and deliberately does **not** live in the plugin's
 installed directory: contract §4 keys that path on the manifest version, so an
@@ -152,9 +160,27 @@ upgrade would silently reset every box to `local`.
 
 ### What is not here
 
-No streaming or realtime (OpenRouter's audio API is synchronous only), no
-diarization, and no dashboard toggle yet — the settings frame it belongs in is
-still being built. The CLI is the whole surface for now.
+No streaming or realtime (OpenRouter's audio API is synchronous only), and no
+diarization.
+
+## Settings in the dashboard
+
+The manifest declares its settings under `fivedive.settings` — each one's key,
+label, type (`enum` with its options, or `string`), default and help text — and
+names the verb that reads and writes them. The 5dive dashboard draws its form
+from that declaration and reaches the box only through the verb:
+
+```
+5dive voice config --json                 # {"ok":true,"values":{...},"notices":[...]}
+sudo 5dive voice config set <key> <value> # one value; refused unless the declaration allows it
+```
+
+So the manifest is the one list of what is settable. The verb validates against
+it, and the form offers exactly what it declares. **The OpenRouter key is not a
+setting and never will be:** it is a secret, it stays in the connector store, and
+when the backend is `openrouter` without one, `config --json` returns a notice
+naming `openrouter.env` so the dashboard can send you to its own way of adding a
+key rather than asking for it in the form.
 
 ## Why `plugin add` does not run the setup for you
 
