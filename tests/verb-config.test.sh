@@ -77,6 +77,20 @@ run config get nope >/dev/null 2>&1; t_eq "get refuses an undeclared key" "$?" "
 t_has "the plain form lists key=value" "$(run config 2>/dev/null)" "tts_model=microsoft/mai-voice-2-flash"
 run config frobnicate >/dev/null 2>&1; t_eq "an unknown subcommand is a usage error" "$?" "64"
 
+# DIVE-4985. Through the CLI the verb never sees `--json`: `5dive` strips it
+# from argv before dispatch and exports FIVEDIVE_JSON_MODE=1 instead (DIVE-4893).
+# That is the exact path the dashboard's form takes, so it is graded here as the
+# dispatcher would call it — no flag, only the mode.
+echo "== the dispatcher's JSON mode, with --json already stripped (DIVE-4985) =="
+out=$(FIVEDIVE_JSON_MODE=1 run config 2>/dev/null); rc=$?
+t_eq "FIVEDIVE_JSON_MODE=1 with no flag → rc=0" "$rc" "0"
+t_eq "...answers the JSON object the form parses" "$(jq -r '.ok' <<<"$out" 2>/dev/null)" "true"
+t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_model,tts_model,tts_voice"
+out=$(FIVEDIVE_JSON_MODE=1 VOICE_LIB="$T/absent.sh" "$VOICE" config 2>/dev/null)
+t_eq "...and without the engine it still says why, in JSON" "$(jq -r '.reason' <<<"$out" 2>/dev/null)" "engine_missing"
+t_has "FIVEDIVE_JSON_MODE=0 (the dispatcher's default) keeps the plain form" "$(FIVEDIVE_JSON_MODE=0 run config 2>/dev/null)" "backend=local"
+t_eq "get is not changed by the mode" "$(FIVEDIVE_JSON_MODE=1 run config get backend 2>/dev/null)" "local"
+
 echo "== writing is a root act; refusals write nothing =="
 if [[ $EUID -ne 0 ]]; then
   out=$(run config set tts_voice nova 2>&1); rc=$?
