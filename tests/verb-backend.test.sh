@@ -107,5 +107,18 @@ t_has "help names the Russian/Ukrainian gap in the most accurate English model" 
 t_has "help says the default model does cover Russian" "$h" "Russian"
 t_has "help is honest that 'local' speaking is not local" "$h" "Microsoft"
 
+echo "== DIVE-5043: voice's own OpenRouter key wins, else the box's shared one =="
+# The REAL reader (the stub above answers the verb's arms); one scratch store.
+K="$T/keys"; mkdir -p "$K"
+rk() { ( VOICE_CONNECTORS_DIR="$K"; source "$ROOT/voice/lib/voice-backend.sh"; voice_openrouter_key ) 2>/dev/null; }
+printf 'OPENROUTER_API_KEY=sk-or-v1-SHAREDsharedSHAREDshared01\n' >"$K/openrouter.env"
+t_eq "only the shared key: voice uses it" "$(rk)" "sk-or-v1-SHAREDsharedSHAREDshared01"
+printf 'OPENROUTER_API_KEY=sk-or-v1-VOICEvoiceVOICEvoiceVOICE01\n' >"$K/openrouter-voice.env"
+t_eq "its own key set (config openrouter-key.voice=-): voice uses its own, not the shared one" "$(rk)" "sk-or-v1-VOICEvoiceVOICEvoiceVOICE01"
+rm -f "$K/openrouter.env"
+t_eq "its own key alone is enough" "$(rk)" "sk-or-v1-VOICEvoiceVOICEvoiceVOICE01"
+rm -f "$K/openrouter-voice.env"
+rk >/dev/null; t_eq "neither: no key (rc 1)" "$?" "1"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
