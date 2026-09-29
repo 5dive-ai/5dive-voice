@@ -154,6 +154,26 @@ sudo 5dive voice config set tts_voice nova
   the service `edge-tts` scrapes.
 - `tts_voice` — default `alloy`, a voice name the speaking model offers.
 
+### Each agent speaks in its own character's voice
+
+An agent imported from an OpenAgent pack keeps its `persona.yaml` in its own
+`~/.claude/`, and a pack can carry `voice.audio.base` (a voice name) and
+`voice.audio.style` (how to say things). On `openrouter`, `5dive-speak` run by
+that agent speaks in that voice, with the style as the delivery instruction, on
+`google/gemini-3.8-flash-tts` — the pack voice names (Charon, Kore, Puck,
+Sulafat, Achird, …) are Gemini TTS's prebuilt voices, which no other model has.
+It speaks the language of the text it is given. To use a different Gemini TTS
+model for character voices, put `persona_tts_model=<model>` in the config file.
+
+An agent with no voice in its pack, an explicit `--voice=`, and the `local`
+backend all behave exactly as before. If a character voice call fails, the reply
+is spoken in the box default instead, with a line on stderr.
+
+The key is the connector above. A box built by a partner that seeds each box its
+own OpenRouter key has no connector: its key sits in the `openrouter` account the
+agents answer on, and voice reads it from there, last, and only when that account
+points at OpenRouter.
+
 The config file is host state and deliberately does **not** live in the plugin's
 installed directory: contract §4 keys that path on the manifest version, so an
 upgrade would silently reset every box to `local`.
