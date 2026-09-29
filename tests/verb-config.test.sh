@@ -37,8 +37,8 @@ run() { VOICE_LIB="$LIB" "$VOICE" "$@"; }
 echo "== the declaration the dashboard draws its form from =="
 t_eq "settings are reached through a verb this plugin actually declares" \
   "$(jq -r '.fivedive.settings.verb as $v | [.fivedive.verbs[].name] | index($v) != null' "$M")" "true"
-t_eq "the four knobs are declared, backend first" \
-  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_model,tts_model,tts_voice"
+t_eq "the five knobs are declared, backend first" \
+  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_backend,stt_model,tts_model,tts_voice"
 t_eq "every field carries a key, a label and a known type" \
   "$(jq -r '[.fivedive.settings.fields[] | (.key|type)=="string" and (.label|type)=="string" and (.type=="enum" or .type=="string")] | all' "$M")" "true"
 t_eq "every enum names its options" \
@@ -70,7 +70,7 @@ t_eq "...ok:true" "$(jq -r '.ok' <<<"$out")" "true"
 t_eq "...backend local" "$(jq -r '.values.backend' <<<"$out")" "local"
 t_eq "...the engine's default hearing model" "$(jq -r '.values.stt_model' <<<"$out")" "openai/whisper-large-v3-turbo"
 t_eq "...the engine's default voice" "$(jq -r '.values.tts_voice' <<<"$out")" "alloy"
-t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_model,tts_model,tts_voice"
+t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_backend,stt_model,tts_model,tts_voice"
 t_eq "...and no notices" "$(jq -r '.notices | length' <<<"$out")" "0"
 t_eq "get reads one key" "$(run config get backend 2>/dev/null)" "local"
 run config get nope >/dev/null 2>&1; t_eq "get refuses an undeclared key" "$?" "2"
@@ -85,7 +85,7 @@ echo "== the dispatcher's JSON mode, with --json already stripped (DIVE-4985) ==
 out=$(FIVEDIVE_JSON_MODE=1 run config 2>/dev/null); rc=$?
 t_eq "FIVEDIVE_JSON_MODE=1 with no flag → rc=0" "$rc" "0"
 t_eq "...answers the JSON object the form parses" "$(jq -r '.ok' <<<"$out" 2>/dev/null)" "true"
-t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_model,tts_model,tts_voice"
+t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_backend,stt_model,tts_model,tts_voice"
 out=$(FIVEDIVE_JSON_MODE=1 VOICE_LIB="$T/absent.sh" "$VOICE" config 2>/dev/null)
 t_eq "...and without the engine it still says why, in JSON" "$(jq -r '.reason' <<<"$out" 2>/dev/null)" "engine_missing"
 t_has "FIVEDIVE_JSON_MODE=0 (the dispatcher's default) keeps the plain form" "$(FIVEDIVE_JSON_MODE=0 run config 2>/dev/null)" "backend=local"
@@ -146,6 +146,50 @@ else
   t_eq "...and one notice, on backend" "$(jq -r '[.notices[].key] | join(",")' <<<"$out")" "backend"
   t_eq "...naming the connector that fixes it" "$(jq -r '.notices[0].connector' <<<"$out")" "openrouter.env"
   t_no "...and the notice never carries a key" "$out" "sk-or-"
+
+  echo "== stt_backend moves hearing alone (DIVE-5189) =="
+  printf 'OPENROUTER_API_KEY=sk-or-%s\n' "$(printf 'a%.0s' {1..30})" > "$VOICE_CONNECTORS_DIR/openrouter.env"
+  t_eq "unset, hearing follows backend" "$(run config get stt_backend)" "openrouter"
+  out=$(run config set stt_backend local 2>&1); rc=$?
+  t_eq "stt_backend=local lands" "$rc" "0"
+  t_eq "...hearing reads local" "$(run config get stt_backend)" "local"
+  t_eq "...speaking stays openrouter" "$(run config get backend)" "openrouter"
+  t_eq "...and the engine agrees on both halves" \
+    "$(. "$LIB"; voice_effective_stt_backend 2>/dev/null) $(. "$LIB"; voice_effective_backend 2>/dev/null)" "local openrouter"
+  run config set stt_backend elsewhere >/dev/null 2>&1
+  t_eq "a value outside the enum is refused" "$?" "2"
+  run config set backend local >/dev/null 2>&1
+  rm -f "$VOICE_CONNECTORS_DIR/openrouter.env"
+  out=$(run config set stt_backend openrouter 2>&1); rc=$?
+  t_eq "moving hearing to openrouter without a key is refused" "$rc" "1"
+  t_has "...naming the fix" "$out" "5dive-write-connector openrouter.env"
+  t_eq "...and hearing stays local" "$(run config get stt_backend)" "local"
+
+  echo "== config init writes a box's FIRST config and never a second =="
+  rm -f "$CFG"
+  out=$(VOICE_LIB="$T/absent.sh" "$VOICE" config init backend=openrouter stt_backend=local tts_model=google/gemini-3.8-flash-tts tts_voice=Kore 2>&1); rc=$?
+  t_eq "init runs with NO engine installed yet (it precedes setup)" "$rc" "0"
+  t_eq "...and says it wrote" "$out" "config: written"
+  t_has "...backend" "$(cat "$CFG")" "backend=openrouter"
+  t_has "...stt_backend" "$(cat "$CFG")" "stt_backend=local"
+  t_has "...tts_voice" "$(cat "$CFG")" "tts_voice=Kore"
+  t_eq "...mode 644 (every seat reads it)" "$(stat -c %a "$CFG")" "644"
+  printf 'backend=local\n# the customer chose this\n' > "$CFG"
+  out=$(run config init backend=openrouter stt_backend=local 2>&1); rc=$?
+  t_eq "a second init exits 0" "$rc" "0"
+  t_eq "...says kept" "$out" "config: kept"
+  t_eq "...and the customer's file is byte-for-byte untouched" "$(cat "$CFG")" "$(printf 'backend=local\n# the customer chose this')"
+  out=$(FIVEDIVE_JSON_MODE=1 run config init backend=openrouter 2>&1)
+  t_eq "--json answers kept" "$(jq -r '.config' <<<"$out" 2>/dev/null)" "kept"
+  rm -f "$CFG"
+  run config init backend=openrouter tts_voice='bad value' >/dev/null 2>&1; rc=$?
+  t_eq "one invalid pair refuses the whole init" "$rc" "2"
+  t_eq "...and nothing was written" "$([[ -e "$CFG" ]] && echo present || echo absent)" "absent"
+  run config init api_key=sk-or-x >/dev/null 2>&1
+  t_eq "an undeclared key is refused" "$?" "2"
+  run config init backend >/dev/null 2>&1
+  t_eq "a pair with no = is a usage error" "$?" "64"
+  t_eq "no temp file is left behind" "$(find "$VOICE_STATE_DIR" -name '.config.*' | wc -l | tr -d ' ')" "0"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
