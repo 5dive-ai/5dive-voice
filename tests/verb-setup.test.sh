@@ -120,5 +120,11 @@ else
   echo "  skip (needs root — the preflight sits behind require_root)"
 fi
 
+echo "== the pip step holds PyAV below 19 (2026-10-02) =="
+# PyAV 19 dropped av.open(metadata_errors=), which faster-whisper 1.2.1 passes:
+# with av unpinned every transcribe on a fresh box 500s.
+pipline=$(grep -E 'pip" install .*faster-whisper' "$INSTALLER")
+t_has "the faster-whisper install pins av<19" "$pipline" "'av<19'"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
