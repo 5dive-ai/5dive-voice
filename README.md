@@ -160,7 +160,7 @@ An agent imported from an OpenAgent pack keeps its `persona.yaml` in its own
 `~/.claude/`, and a pack can carry `voice.audio.base` (a voice name) and
 `voice.audio.style` (how to say things). On `openrouter`, `5dive-speak` run by
 that agent speaks in that voice, with the style as the delivery instruction, on
-`google/gemini-3.8-flash-tts` — the pack voice names (Charon, Kore, Puck,
+`google/gemini-3.8-flash-lite-tts` — the pack voice names (Charon, Kore, Puck,
 Sulafat, Achird, …) are Gemini TTS's prebuilt voices, which no other model has.
 It speaks the language of the text it is given. To use a different Gemini TTS
 model for character voices, put `persona_tts_model=<model>` in the config file.
