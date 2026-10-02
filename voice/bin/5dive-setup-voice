@@ -160,7 +160,11 @@ step_pip() {
     as_claude python3 -m venv "$VENV"
     ok "created venv at $VENV"
   fi
-  as_claude "$VENV/bin/pip" install --quiet --upgrade faster-whisper edge-tts
+  # PyAV 19 (2026-09-29) dropped av.open(metadata_errors=), which faster-whisper
+  # 1.2.1 still passes: every transcribe 500s. Hold av below 19 until a
+  # faster-whisper release stops passing it. Re-running this step on a box that
+  # already got av 19 downgrades it.
+  as_claude "$VENV/bin/pip" install --quiet --upgrade faster-whisper edge-tts 'av<19'
   # edge-tts is used directly by agents; whisper is called via the HTTP service
   # below, so no need to symlink faster-whisper.
   if [[ -x "$VENV/bin/edge-tts" ]]; then
