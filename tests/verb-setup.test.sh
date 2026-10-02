@@ -126,5 +126,14 @@ echo "== the pip step holds PyAV below 19 (2026-10-02) =="
 pipline=$(grep -E 'pip" install .*faster-whisper' "$INSTALLER")
 t_has "the faster-whisper install pins av<19" "$pipline" "'av<19'"
 
+echo "== the agent section asks for a voice reply only when the user spoke (DIVE-5397) =="
+# v4 said "ALWAYS send the text reply first ... then the voice attachment", so
+# agents sent a voice note after every reply, typed messages included. The v4 to
+# v5 upgrade itself is graded in 5dive-api's scripts/test-voice-backend.test.sh.
+inst=$(cat "$INSTALLER")
+t_no  "the 'ALWAYS ... voice attachment' wording is gone" "$inst" "ALWAYS send the text reply first"
+t_has "a typed message gets text only" "$inst" "a typed message gets a text reply only — no voice note"
+t_has "the section is v5, so a v4 box is rewritten" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v5 -->"'
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
