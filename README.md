@@ -165,9 +165,30 @@ Sulafat, Achird, …) are Gemini TTS's prebuilt voices, which no other model has
 It speaks the language of the text it is given. To use a different Gemini TTS
 model for character voices, put `persona_tts_model=<model>` in the config file.
 
-An agent with no voice in its pack, an explicit `--voice=`, and the `local`
-backend all behave exactly as before. If a character voice call fails, the reply
-is spoken in the box default instead, with a line on stderr.
+An agent with no voice in its pack and an explicit `--voice=` behave exactly as
+before. If a character voice call fails, the reply is spoken in the box default
+instead, with a line on stderr.
+
+### On `local`, each agent has its own Microsoft voice too
+
+The free backend speaks through Microsoft's edge voices, and each agent gets
+its own (DIVE-5443). Before, every agent on a box spoke `en-US-AriaNeural`.
+
+- **A pack voice keeps its character.** Each of the 30 Gemini voice names maps
+  to one fixed edge voice of the same gender (Google's genders), closest in tone
+  and spread across English accents. No two Gemini voices share an edge voice.
+  The table is `VOICE_EDGE_TABLE` in `voice/lib/voice-backend.sh`.
+- **An agent with no pack voice** gets a stable pick from its unix name. It
+  skips voices another agent on the box already holds, so two agents share a
+  voice only when the box has more agents than the pool has voices. A new agent
+  never moves an older agent's voice.
+- **A Russian or Ukrainian reply** is spoken by that language's voice of the
+  agent's gender (`ru-RU-DmitryNeural`/`SvetlanaNeural`,
+  `uk-UA-OstapNeural`/`PolinaNeural`). The language comes from the reply text.
+- **Precedence:** `--voice=`, then an `edge_voice=` line you write in the config
+  file, then the agent's own voice, then Aria. The `# edge_voice=` line that
+  setup writes is a comment and counts as unset. Uncomment it to give every
+  agent one voice.
 
 The key is the connector above. A box built by a partner that seeds each box its
 own OpenRouter key has no connector: its key sits in the `openrouter` account the
