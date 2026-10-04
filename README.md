@@ -199,6 +199,17 @@ The config file is host state and deliberately does **not** live in the plugin's
 installed directory: contract §4 keys that path on the manifest version, so an
 upgrade would silently reset every box to `local`.
 
+### Turning voice replies off
+
+`sudo 5dive plugin disable voice` switches voice REPLIES off on the box
+(1.7.0): while every installed copy of the plugin is disabled, `5dive-speak`
+exits 3 without a voice note and tells the agent to answer in text, so a voice
+note gets a typed answer. Hearing is not gated, because the agent still has to
+understand the note it answers. `5dive plugin enable voice` turns replies back
+on. A box with no plugin record at all (an engine installed before the plugin
+existed) keeps speaking. The same gate is in 5dive-api's copy of the engine,
+which the nightly reinstalls.
+
 ### What is not here
 
 No streaming or realtime (OpenRouter's audio API is synchronous only), and no
