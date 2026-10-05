@@ -67,6 +67,12 @@ only by 5dive's own box installer. On a 5dive-provisioned box that worked; on an
 other box the plugin installed cleanly and its host half could not be installed at
 all, which is not a state a published plugin should be able to reach.
 
+A setup that fails halfway is retried, not stuck (1.7.1, DIVE-5614). On Ubuntu,
+`python3 -m venv` needs the `python3-venv` package, and without it leaves a venv
+directory with no pip in it. The installer now installs that package itself and
+repairs a venv with no pip on the next run, where it used to skip any venv whose
+directory already existed.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
