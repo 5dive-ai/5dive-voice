@@ -135,5 +135,79 @@ t_no  "the 'ALWAYS ... voice attachment' wording is gone" "$inst" "ALWAYS send t
 t_has "a typed message gets text only" "$inst" "a typed message gets a text reply only — no voice note"
 t_has "the section is v5, so a v4 box is rewritten" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v5 -->"'
 
+echo "== a venv left with no pip is rebuilt on the next run (DIVE-5614) =="
+# solar-shell, 2026-10-05: the first run's `python3 -m venv` failed at ensurepip
+# (no python3-venv) after making the directory, and step_pip only created a venv
+# whose DIRECTORY was missing — so every retry ran a pip that did not exist.
+# The same arms as 5dive-api scripts/test-voice-backend.test.sh, on this copy.
+# python3, the venv's python and pip are stubs; "ensurepip present" is a flag
+# file, the way python3-venv being installed is on a real box.
+VF="$T/venvfix"; mkdir -p "$VF/bin"
+cat > "$VF/bin/python3" <<'FAKEPY'
+#!/usr/bin/env bash
+vf=@VF@
+echo "python3 $*" >> "$vf/calls.log"
+if [[ "$1" == -c ]]; then [[ -e "$vf/ensurepip" ]]; exit; fi
+if [[ "$1 $2" == "-m venv" ]]; then
+  shift 2
+  if [[ "$1" == --clear ]]; then shift; rm -rf "${1:?}"/*; fi
+  mkdir -p "$1/bin"; cp "$vf/venvpython" "$1/bin/python"
+  [[ -e "$vf/ensurepip" ]] || exit 1
+  cp "$vf/venvpip" "$1/bin/pip"
+fi
+FAKEPY
+cat > "$VF/venvpython" <<'FAKEPY'
+#!/usr/bin/env bash
+vf=@VF@
+echo "venv-python $*" >> "$vf/calls.log"
+[[ "$*" == "-m ensurepip"* && -e "$vf/ensurepip" ]] && cp "$vf/venvpip" "$(dirname "$0")/pip"
+FAKEPY
+printf '#!/usr/bin/env bash\necho "pip $*" >> @VF@/calls.log\n' > "$VF/venvpip"
+printf '#!/usr/bin/env bash\necho "apt-get $*" >> @VF@/calls.log\n[[ "$*" == *"install -y -qq python3-venv"* ]] && touch @VF@/ensurepip\nexit 0\n' > "$VF/bin/apt-get"
+printf '#!/usr/bin/env bash\n[[ "$1" == -u ]] && shift 2\n[[ "$1" == -- ]] && shift\nexec "$@"\n' > "$VF/bin/runuser"
+sed -i "s#@VF@#$VF#g" "$VF/bin/python3" "$VF/venvpython" "$VF/venvpip" "$VF/bin/apt-get"
+chmod 755 "$VF/bin/"* "$VF/venvpython" "$VF/venvpip"
+venv_run() {  # <ensurepip: yes|no> -> runs step_pip once against $VF/venv in a subshell
+  rm -f "$VF/calls.log" "$VF/ensurepip"; [[ "$1" == yes ]] && touch "$VF/ensurepip"
+  ( set -euo pipefail
+    PATH="$VF/bin:$PATH"; VENV="$VF/venv"
+    eval "$(grep -E '^B=' "$INSTALLER")"
+    eval "$(sed -n '/^say()/p; /^ok()/p; /^warn()/p; /^die()/p' "$INSTALLER")"
+    eval "$(awk '/^as_claude\(\)/,/^}$/' "$INSTALLER")"
+    eval "$(awk '/^step_pip\(\)/,/^}$/' "$INSTALLER")"
+    step_pip ) >/dev/null 2>&1
+}
+# The box as the journal shows it: the directory, nothing usable in it, and no python3-venv.
+rm -rf "$VF/venv"; mkdir -p "$VF/venv/lib"
+venv_run no; rc=$?
+calls="$(cat "$VF/calls.log" 2>/dev/null)"
+t_eq  "A VENV DIRECTORY WITH NO pip IS REBUILT: step_pip exits 0" "$rc" "0"
+t_has "...python3-venv is installed first" "$calls" "apt-get install -y -qq python3-venv"
+t_has "...the venv is recreated over the half-made directory" "$calls" "python3 -m venv --clear $VF/venv"
+t_has "...and faster-whisper is installed into it" "$calls" "pip install --quiet --upgrade faster-whisper edge-tts av<19"
+# A venv whose python works but whose pip is gone gets pip back in place, and
+# keeps whatever is installed in it.
+rm -rf "$VF/venv"; mkdir -p "$VF/venv/bin"; cp "$VF/venvpython" "$VF/venv/bin/python"; touch "$VF/venv/kept"
+venv_run yes; rc=$?
+calls="$(cat "$VF/calls.log" 2>/dev/null)"
+t_eq  "a venv with python but no pip: exit 0" "$rc" "0"
+t_has "...pip is restored in place" "$calls" "venv-python -m ensurepip --upgrade --default-pip"
+t_no  "...without wiping the venv" "$calls" "--clear"
+[[ -e "$VF/venv/kept" ]] && t_ok "...whose contents survive" || t_fail "...whose contents survive" "the venv was cleared"
+t_no  "...and no apt when ensurepip is already there" "$calls" "apt-get"
+# A healthy venv costs nothing but the pip install.
+venv_run yes; rc=$?
+calls="$(cat "$VF/calls.log" 2>/dev/null)"
+t_no  "a healthy venv is not recreated" "$calls" "-m venv"
+t_no  "...nor its pip reinstalled" "$calls" "ensurepip --upgrade"
+t_has "...it only gets the pip install" "$calls" "pip install --quiet"
+# If python3-venv still cannot be had, say so instead of exec'ing a missing pip.
+rm -rf "$VF/venv"; mkdir -p "$VF/venv"
+printf '#!/usr/bin/env bash\necho "apt-get $*" >> %s/calls.log\nexit 0\n' "$VF" > "$VF/bin/apt-get"
+venv_run no; rc=$?
+calls="$(cat "$VF/calls.log" 2>/dev/null)"
+t_no  "a venv still with no pip after creation fails the step" "$rc" "0"
+t_no  "...before running a pip that is not there" "$calls" "pip install"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
