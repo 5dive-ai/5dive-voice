@@ -73,6 +73,13 @@ directory with no pip in it. The installer now installs that package itself and
 repairs a venv with no pip on the next run, where it used to skip any venv whose
 directory already existed.
 
+A long voice note is heard, not dropped (1.7.2, DIVE-5750). `5dive-transcribe`
+used to wait a fixed 120 seconds for the local whisper, which on a CPU box cut
+off every note over about 5 minutes while whisper was still working on it. The
+wait is now 120 seconds plus the note's own length, a dead service still fails
+at once, and a note that does run out of time is reported as too long, not as
+one that could not be heard.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
