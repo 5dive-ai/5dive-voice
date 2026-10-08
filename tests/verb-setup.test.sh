@@ -129,11 +129,12 @@ t_has "the faster-whisper install pins av<19" "$pipline" "'av<19'"
 echo "== the agent section asks for a voice reply only when the user spoke (DIVE-5397) =="
 # v4 said "ALWAYS send the text reply first ... then the voice attachment", so
 # agents sent a voice note after every reply, typed messages included. The v4 to
-# v5 upgrade itself is graded in 5dive-api's scripts/test-voice-backend.test.sh.
+# v5 and v5 to v6 upgrades are graded in 5dive-api's scripts/test-voice-backend.test.sh.
 inst=$(cat "$INSTALLER")
 t_no  "the 'ALWAYS ... voice attachment' wording is gone" "$inst" "ALWAYS send the text reply first"
 t_has "a typed message gets text only" "$inst" "a typed message gets a text reply only — no voice note"
-t_has "the section is v5, so a v4 box is rewritten" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v5 -->"'
+t_has "the section is v6, so a v4 or v5 box is rewritten" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v6 -->"'
+t_has "...and it names the hearing settings, so an agent points at them instead of patching the plugin (DIVE-5869)" "$inst" "sudo 5dive voice config set stt_fast 1"
 
 echo "== a venv left with no pip is rebuilt on the next run (DIVE-5614) =="
 # solar-shell, 2026-10-05: the first run's `python3 -m venv` failed at ensurepip

@@ -80,6 +80,12 @@ wait is now 120 seconds plus the note's own length, a dead service still fails
 at once, and a note that does run out of time is reported as too long, not as
 one that could not be heard.
 
+Hearing's language and speed are settings (1.8.0, DIVE-5869): `stt_language`
+pins the language and `stt_fast` turns on greedy decoding, see "Hearing speed and
+language on this box" below. A running `whisper-service` is now restarted onto
+new code when setup or the nightly changes it; before, it kept the code it was
+first installed with.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
@@ -146,6 +152,24 @@ present is revoked or removed afterwards, the box **falls back to local with a
 warning and still transcribes** — the alternative is dropping a message someone
 already sent. The fallback is deliberately one-way: a box configured `local`
 never reaches the network, even with a key sitting on disk.
+
+### Hearing speed and language on this box
+
+Only read when hearing runs locally. Left unset, whisper detects the language of
+every note and weighs five candidate readings, as it always has. An owner whose
+notes are always in one language can pin it, and can trade a little accuracy for
+speed (1.8.0, DIVE-5869):
+
+```
+sudo 5dive voice config set stt_language ru    # a language code; auto detects again
+sudo 5dive voice config set stt_fast 1         # one reading instead of five; 0 turns it off
+```
+
+A 20-second Russian note took about 5.2 s on the defaults and about 3.4 s with
+both set. `stt_fast` needs a `whisper-service` that reads `beam_size`: setup and
+the nightly restart a running service onto new code when it changes, and
+`config set stt_fast 1` says so when the running one is older. Do not edit the
+plugin's files to get the same effect: the next update replaces them.
 
 ### Models
 
