@@ -37,8 +37,8 @@ run() { VOICE_LIB="$LIB" "$VOICE" "$@"; }
 echo "== the declaration the dashboard draws its form from =="
 t_eq "settings are reached through a verb this plugin actually declares" \
   "$(jq -r '.fivedive.settings.verb as $v | [.fivedive.verbs[].name] | index($v) != null' "$M")" "true"
-t_eq "the five knobs are declared, backend first" \
-  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_backend,stt_model,tts_model,tts_voice"
+t_eq "the seven knobs are declared, backend first" \
+  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_backend,stt_language,stt_fast,stt_model,tts_model,tts_voice"
 t_eq "every field carries a key, a label and a known type" \
   "$(jq -r '[.fivedive.settings.fields[] | (.key|type)=="string" and (.label|type)=="string" and (.type=="enum" or .type=="string")] | all' "$M")" "true"
 t_eq "every enum names its options" \
@@ -70,8 +70,13 @@ t_eq "...ok:true" "$(jq -r '.ok' <<<"$out")" "true"
 t_eq "...backend local" "$(jq -r '.values.backend' <<<"$out")" "local"
 t_eq "...the engine's default hearing model" "$(jq -r '.values.stt_model' <<<"$out")" "openai/whisper-large-v3-turbo"
 t_eq "...the engine's default voice" "$(jq -r '.values.tts_voice' <<<"$out")" "alloy"
-t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_backend,stt_model,tts_model,tts_voice"
+t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice"
 t_eq "...and no notices" "$(jq -r '.notices | length' <<<"$out")" "0"
+# DIVE-5869: unset, hearing detects the language and uses five beams; the form
+# must show exactly that, and its defaults must be the manifest's.
+t_eq "...language auto, fast off" "$(jq -r '"\(.values.stt_language) \(.values.stt_fast)"' <<<"$out")" "auto 0"
+t_eq "...which are the manifest's defaults" \
+  "$(jq -r '[.fivedive.settings.fields[] | select(.key=="stt_language" or .key=="stt_fast") | .default] | join(" ")' "$M")" "auto 0"
 t_eq "get reads one key" "$(run config get backend 2>/dev/null)" "local"
 run config get nope >/dev/null 2>&1; t_eq "get refuses an undeclared key" "$?" "2"
 t_has "the plain form lists key=value" "$(run config 2>/dev/null)" "tts_model=microsoft/mai-voice-2-flash"
@@ -85,7 +90,7 @@ echo "== the dispatcher's JSON mode, with --json already stripped (DIVE-4985) ==
 out=$(FIVEDIVE_JSON_MODE=1 run config 2>/dev/null); rc=$?
 t_eq "FIVEDIVE_JSON_MODE=1 with no flag → rc=0" "$rc" "0"
 t_eq "...answers the JSON object the form parses" "$(jq -r '.ok' <<<"$out" 2>/dev/null)" "true"
-t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_backend,stt_model,tts_model,tts_voice"
+t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice"
 out=$(FIVEDIVE_JSON_MODE=1 VOICE_LIB="$T/absent.sh" "$VOICE" config 2>/dev/null)
 t_eq "...and without the engine it still says why, in JSON" "$(jq -r '.reason' <<<"$out" 2>/dev/null)" "engine_missing"
 t_has "FIVEDIVE_JSON_MODE=0 (the dispatcher's default) keeps the plain form" "$(FIVEDIVE_JSON_MODE=0 run config 2>/dev/null)" "backend=local"
@@ -164,6 +169,50 @@ else
   t_eq "moving hearing to openrouter without a key is refused" "$rc" "1"
   t_has "...naming the fix" "$out" "5dive-write-connector openrouter.env"
   t_eq "...and hearing stays local" "$(run config get stt_backend)" "local"
+
+  echo "== hearing's language and fast mode (DIVE-5869) =="
+  # A fake whisper-service whose /health predates beam_size, so the verb's
+  # "not on yet" note is graded without touching a real service on :8765.
+  python3 - "$T/oldws.port" <<'PY' &
+import sys, json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        out = json.dumps({"ok": True, "model": "small"}).encode()
+        self.send_response(200); self.send_header('Content-Length', str(len(out))); self.end_headers(); self.wfile.write(out)
+srv = HTTPServer(('127.0.0.1', 0), H)
+open(sys.argv[1], 'w').write(str(srv.server_address[1])); srv.serve_forever()
+PY
+  OLDWS_PID=$!
+  for _ in $(seq 1 50); do [[ -s "$T/oldws.port" ]] && break; sleep 0.1; done
+  export VOICE_SERVICE_PORT=9   # nothing listens: no note, no failure
+  out=$(run config set stt_language ru 2>&1); rc=$?
+  t_eq "stt_language=ru lands" "$rc:$out" "0:stt_language: ru"
+  t_eq "...reads back" "$(run config get stt_language)" "ru"
+  t_eq "...and the engine sends it" "$(. "$LIB"; voice_stt_language)" "ru"
+  for bad in Russian RU r ru-RU 'ru;id' russ; do
+    out=$(run config set stt_language "$bad" 2>&1); rc=$?
+    t_eq "refuses stt_language=[$bad] (rc 2)" "$rc" "2"
+  done
+  t_has "...naming what a language code looks like" "$out" "a code such as ru, en or uk"
+  t_eq "...and the file still says ru" "$(grep '^stt_language=' "$CFG")" "stt_language=ru"
+  run config set stt_language auto >/dev/null 2>&1
+  t_eq "auto turns detection back on" "$(run config get stt_language) [$(. "$LIB"; voice_stt_language)]" "auto []"
+  run config set stt_fast 2 >/dev/null 2>&1; t_eq "stt_fast refuses 2" "$?" "2"
+  run config set stt_fast yes >/dev/null 2>&1; t_eq "...and yes" "$?" "2"
+  out=$(run config set stt_fast 1 2>&1); rc=$?
+  t_eq "stt_fast=1 lands, quietly when no service answers" "$rc:$out" "0:stt_fast: 1"
+  t_eq "...reads back" "$(run config --json | jq -r '.values.stt_fast')" "1"
+  t_eq "...and the engine reads it" "$(. "$LIB"; voice_stt_fast)" "1"
+  out=$(VOICE_SERVICE_PORT="$(cat "$T/oldws.port")" run config set stt_fast 1 2>&1); rc=$?
+  t_eq "a running service that predates fast mode: still rc 0" "$rc" "0"
+  t_has "...and the owner is told it is not on until setup runs" "$out" "sudo 5dive voice setup"
+  out=$(VOICE_SERVICE_PORT="$(cat "$T/oldws.port")" run config set stt_fast 0 2>&1)
+  t_no "...turning it off needs no such note" "$out" "voice setup"
+  t_eq "one line per key, however often it is set" "$(grep -c '^stt_fast=' "$CFG"):$(grep -c '^stt_language=' "$CFG")" "1:1"
+  kill "$OLDWS_PID" 2>/dev/null
+  unset VOICE_SERVICE_PORT
 
   echo "== config init writes a box's FIRST config and never a second =="
   rm -f "$CFG"
