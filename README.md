@@ -86,6 +86,12 @@ language on this box" below. A running `whisper-service` is now restarted onto
 new code when setup or the nightly changes it; before, it kept the code it was
 first installed with.
 
+Hearing loads whisper `base` by default on every box (1.9.0, DIVE-5897). It
+used to be `small`, which took 9-12 s on a 2-vCPU / 4 GB box where `base` takes
+3-4 s, and still 6-8 s on a much bigger one. `small` is now the owner's opt-in
+for accuracy: `sudo 5dive voice config set whisper_model small`, see "Hearing
+speed and language on this box" below.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
@@ -170,6 +176,24 @@ both set. `stt_fast` needs a `whisper-service` that reads `beam_size`: setup and
 the nightly restart a running service onto new code when it changes, and
 `config set stt_fast 1` says so when the running one is older. Do not edit the
 plugin's files to get the same effect: the next update replaces them.
+
+Which model hears (1.9.0, DIVE-5897):
+
+```
+sudo 5dive voice config set whisper_model small   # more accurate, about 2-3x slower
+sudo 5dive voice config set whisper_model base    # the fast one
+sudo 5dive voice config set whisper_model auto    # back to the default, base
+```
+
+`auto` (or unset) is `base`. Setup and the nightly re-apply it, so a box still on
+the old default `small` moves to `base`; a model an owner chose, one set with
+`WHISPER_MODEL=` for a run of the installer, or one set by hand in the unit
+before 1.9.0 is kept. Setting it rewrites the
+`whisper-service` unit, restarts the service and waits until `/health` answers
+with the new model. `small` is refused on a box with under ~3 GB of memory: it
+peaks at about 0.8 GB while it hears. The agent's Voice section tells it to
+offer `small` when a note was misheard (warning that it is slower) and `base`
+when hearing is slow, and to switch only on the owner's yes.
 
 ### Models
 

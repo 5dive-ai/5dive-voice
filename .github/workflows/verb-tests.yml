@@ -15,6 +15,7 @@ on:
       - 'voice/lib/**'
       - 'tests/verb-setup.test.sh'
       - 'tests/verb-config.test.sh'
+      - 'tests/whisper-model.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -26,6 +27,7 @@ on:
       - 'voice/lib/**'
       - 'tests/verb-setup.test.sh'
       - 'tests/verb-config.test.sh'
+      - 'tests/whisper-model.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -137,4 +139,28 @@ jobs:
             echo "the battery passed with a payload missing — it grades nothing"; mv /tmp/ws.bak voice/lib/whisper-service.py; exit 1
           fi
           mv /tmp/ws.bak voice/lib/whisper-service.py
+          echo "negative control held"
+
+  # DIVE-5897. base is the default whisper model on every box, an owner can
+  # switch it, and the nightly re-applies the default unless a person chose.
+  # Most arms need no root (they run the installer's steps without its root
+  # check); the verb's `config set` arms need root, hence sudo.
+  whisper-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the battery parses
+        run: bash -n tests/whisper-model.test.sh
+      - name: base by default, the owner's switch works both ways (DIVE-5897)
+        run: sudo -E bash tests/whisper-model.test.sh
+      # NEGATIVE CONTROL: put the old default `small` back. The battery must go RED.
+      - name: ...and it goes RED when the default is reverted to small
+        run: |
+          cp voice/lib/voice-backend.sh /tmp/lib.orig
+          sed -i 's/VOICE_DEFAULT_WHISPER_MODEL:-base}"/VOICE_DEFAULT_WHISPER_MODEL:-small}"/' voice/lib/voice-backend.sh
+          grep -q 'VOICE_DEFAULT_WHISPER_MODEL:-small}"' voice/lib/voice-backend.sh || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if sudo -E bash tests/whisper-model.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on the default small — it grades nothing"; cp /tmp/lib.orig voice/lib/voice-backend.sh; exit 1
+          fi
+          cp /tmp/lib.orig voice/lib/voice-backend.sh
           echo "negative control held"
