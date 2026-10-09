@@ -192,5 +192,46 @@ t_has "the reverse: hearing too slow → offer base" "$sec" "whisper_model base"
 CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
 t_eq "a second run does not append it twice" "$(grep -c 'voice section v7' "$MD")" "1"
 
+# ---- the service itself (no root) -------------------------------------------
+# whisper-service.py is run for real with a stub faster_whisper whose
+# WhisperModel records what it was given and stops the script; a
+# sitecustomize fakes the core count. The row's rule: base when the unit sets
+# nothing, cpu_threads=min(cores, 8), WHISPER_CPU_THREADS overrides.
+echo "== whisper-service.py: fallback model and cpu_threads"
+SVC="$ROOT/voice/lib/whisper-service.py"
+mkdir -p "$T/py/faster_whisper"
+cat > "$T/py/faster_whisper/__init__.py" <<'PY'
+import json, os
+class WhisperModel:
+    def __init__(self, name, **kw):
+        with open(os.environ["STUB_OUT"], "w") as f:
+            json.dump({"model": name, **kw}, f)
+        raise SystemExit(0)
+PY
+cat > "$T/py/sitecustomize.py" <<'PY'
+import os
+n = os.environ.get("FAKE_NPROC")
+if n:
+    os.sched_getaffinity = lambda pid: set(range(int(n)))
+    os.cpu_count = lambda: int(n)
+PY
+svc_run() { # <env...> — what WhisperModel was given, as JSON
+  rm -f "$T/stub.json"
+  env -u WHISPER_MODEL -u WHISPER_CPU_THREADS PYTHONPATH="$T/py" STUB_OUT="$T/stub.json" "$@" python3 "$SVC" >/dev/null 2>&1
+  cat "$T/stub.json" 2>/dev/null || echo '{}'
+}
+if command -v python3 >/dev/null; then
+  out=$(svc_run FAKE_NPROC=2)
+  t_eq "no WHISPER_MODEL in the unit: the service loads base, not small" "$(jq -r .model <<<"$out")" "base"
+  t_eq "a 2-core box: 2 threads (the library's 4 would oversubscribe)" "$(jq -r '.cpu_threads // "missing"' <<<"$out")" "2"
+  t_eq "a 16-core box: capped at 8" "$(jq -r '.cpu_threads // "missing"' <<<"$(svc_run FAKE_NPROC=16)")" "8"
+  t_eq "a 6-core box: 6" "$(jq -r '.cpu_threads // "missing"' <<<"$(svc_run FAKE_NPROC=6)")" "6"
+  t_eq "WHISPER_CPU_THREADS overrides" "$(jq -r '.cpu_threads // "missing"' <<<"$(svc_run FAKE_NPROC=16 WHISPER_CPU_THREADS=12)")" "12"
+  t_eq "an explicit WHISPER_MODEL=small is loaded as is" "$(jq -r .model <<<"$(svc_run FAKE_NPROC=4 WHISPER_MODEL=small)")" "small"
+  t_has "/health reports the threads" "$(cat "$SVC")" '"threads": CPU_THREADS'
+else
+  t_fail "python3 is required for the service arms"
+fi
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 (( FAIL == 0 ))
