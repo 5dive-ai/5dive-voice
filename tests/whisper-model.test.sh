@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # tests/whisper-model.test.sh — DIVE-5897.
 #
-# Which whisper model hearing loads used to be the constant `small`. On a
-# 2-vCPU / 4 GB box (5dive's Start) that hears a note in 9-12 s where base
-# takes 3-4 s, so the default now follows the box's hardware, an owner can
-# switch it with `sudo 5dive voice config set whisper_model`, and a later run
-# (the nightly, a resize) re-applies the rule unless a person chose the model.
+# Which whisper model hearing loads used to be `small`: 9-12 s for a note on
+# a Start box, still 6-8 s on a Pro Plus one, where base takes 3-4 s. base is
+# now the default on every box, an owner can switch it with
+# `sudo 5dive voice config set whisper_model`, and a later run (the nightly)
+# re-applies the default unless a person chose the model.
 #
-# These arms run the REAL installer and the REAL verb against scratch paths:
-# the unit file, the service binary and the voice config are all under $T, and
-# systemctl and curl are stubs that record what was asked and answer /health
-# with whatever model the last restart loaded. The hardware is faked through
-# VOICE_NPROC and VOICE_MEMINFO. Root is required (the installer refuses
-# without it), as for the other write-path batteries; CI runs it with sudo.
+# These arms run the REAL installer's steps and the REAL verb against scratch
+# paths: the unit file, the service binary, the voice config and CLAUDE.md are
+# all under $T, and systemctl and curl are stubs that record what was asked and
+# answer /health with whatever model the last restart loaded. Memory is faked
+# through VOICE_MEMINFO.
+#
+# Most arms need NO root: the installer's steps are run by sourcing it without
+# its final `main "$@"` line, which is the only place it checks for root. The
+# verb's `config set` refuses a non-root caller by design, so those arms run
+# only as root (CI runs this with sudo) and say so when they skip.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,10 +29,6 @@ t_has()  { [[ "$2" == *"$3"* ]] && t_ok "$1" || t_fail "$1" "[$2] lacks [$3]"; }
 t_no()   { [[ "$2" != *"$3"* ]] && t_ok "$1" || t_fail "$1" "[$2] unexpectedly has [$3]"; }
 t_eq()   { [[ "$2" == "$3" ]] && t_ok "$1" || t_fail "$1" "want [$3] got [$2]"; }
 
-if [[ $EUID -ne 0 ]]; then
-  echo "skip: the installer refuses to run without root — run: sudo -E bash $0"
-  exit 0
-fi
 command -v jq >/dev/null || { echo "jq required"; exit 2; }
 
 INSTALLER="$ROOT/voice/bin/5dive-setup-voice"
@@ -60,14 +60,20 @@ EOF
 chmod 755 "$T/bin/systemctl" "$T/bin/curl"
 
 mem() { printf 'MemTotal:       %s kB\nMemFree:        100000 kB\n' "$1" > "$T/meminfo"; }
-box() {  # box <cpus> <MemTotal kB>
-  export VOICE_NPROC="$1"; mem "$2"
-}
 export PATH="$T/bin:$PATH" VOICE_MEMINFO="$T/meminfo" VOICE_STATE_DIR="$T/state" \
   WHISPER_UNIT="$T/unit" WHISPER_SERVICE_BIN="$T/whisper-service" WHISPER_WAIT_SECS=4 \
   VOICE_LIB="$LIB"
-unset WHISPER_MODEL
+unset WHISPER_MODEL VOICE_CONFIG
 CFG="$T/state/config"
+# step <name> — one installer step, as main would run it but without its root
+# check. PAYLOAD_DIR is passed because a sourced file has no path of its own.
+step() {
+  ( PAYLOAD_DIR="$ROOT/voice/lib"
+    # shellcheck source=/dev/null
+    . <(sed '$d' "$INSTALLER")
+    "step_$1" )
+}
+[[ "$(tail -n1 "$INSTALLER")" == 'main "$@"' ]] || { echo "the installer no longer ends in main \"\$@\" — fix step()"; exit 2; }
 
 reset() { rm -f "$T/unit" "$T/whisper-service" "$T/active" "$T/loaded" "$T/systemctl.log" "$CFG"; }
 legacy_unit() {  # a unit as every installer before this row wrote it
@@ -75,96 +81,96 @@ legacy_unit() {  # a unit as every installer before this row wrote it
 }
 unit_model()  { sed -n 's/^Environment=WHISPER_MODEL=//p' "$T/unit" 2>/dev/null; }
 unit_source() { sed -n 's/^# whisper-model-source: //p' "$T/unit" 2>/dev/null; }
-setup()  { "$INSTALLER" service >/dev/null 2>&1; }
-apply()  { "$INSTALLER" model >"$T/out" 2>&1; }
+setup()  { step service >/dev/null 2>&1; }
+apply()  { step model >"$T/out" 2>&1; }
 restarts() { grep -c '^restart\|^try-restart' "$T/systemctl.log" 2>/dev/null || true; }
 
-echo "== setup picks the model from the box's own hardware =="
-reset; box 2 3880000; setup
-t_eq "2 vCPU / 4 GB (Start): base" "$(unit_model)" "base"
-t_eq "...recorded as the box's rule" "$(unit_source)" "box"
-reset; box 4 7800000; setup
-t_eq "4 vCPU / 8 GB (Start Plus): small" "$(unit_model)" "small"
-reset; box 4 3880000; setup
-t_eq "4 vCPU but 4 GB: base (memory alone decides it)" "$(unit_model)" "base"
-reset; box 2 16000000; setup
-t_eq "2 vCPU with 16 GB: base (CPUs alone decide it)" "$(unit_model)" "base"
-reset; export VOICE_NPROC=8; VOICE_MEMINFO="$T/absent" setup
-t_eq "a box whose memory cannot be read: base, the one that cannot be slow" "$(unit_model)" "base"
+echo "== setup picks base on every box =="
+mem 3880000; reset; setup
+t_eq "a 4 GB box: base" "$(unit_model)" "base"
+t_eq "...recorded as 5dive's default" "$(unit_source)" "default"
+mem 32000000; reset; setup
+t_eq "a 32 GB box: base too" "$(unit_model)" "base"
+mem 3880000
 
 echo "== an explicit WHISPER_MODEL always wins =="
-reset; box 2 3880000; WHISPER_MODEL=small "$INSTALLER" service >/dev/null 2>&1
-t_eq "WHISPER_MODEL=small on a 2 vCPU / 4 GB box is kept" "$(unit_model)" "small"
+reset; WHISPER_MODEL=small step service >/dev/null 2>&1
+t_eq "WHISPER_MODEL=small is kept" "$(unit_model)" "small"
 t_eq "...recorded as set for that run" "$(unit_source)" "env"
 apply
 t_eq "...and a later run without it does not flip it back" "$(unit_model)" "small"
 
-echo "== existing boxes: the next run re-applies the rule (the nightly's path) =="
-reset; box 2 3880000; legacy_unit small; touch "$T/active"; echo small > "$T/loaded"
+echo "== existing boxes: the next run re-applies the default (the nightly's path) =="
+reset; legacy_unit small; touch "$T/active"; echo small > "$T/loaded"
 apply; rc=$?
-t_eq "a Start box on the old default small moves to base" "$(unit_model)" "base"
+t_eq "a box on the old default small moves to base" "$(unit_model) $(unit_source)" "base default"
 t_eq "...the running service is restarted onto it" "$(restarts)" "1"
 t_eq "...and /health answers base" "$(curl -s x | jq -r .model)" "base"
 t_eq "...rc 0" "$rc" "0"
-reset; box 4 7800000; legacy_unit small; touch "$T/active"; echo small > "$T/loaded"
+: > "$T/systemctl.log"; apply
+t_eq "...and the next run leaves it alone" "$(restarts)" "0"
+reset; legacy_unit base; touch "$T/active"; echo base > "$T/loaded"
 apply
-t_eq "a bigger box on small stays on small" "$(unit_model)" "small"
-t_eq "...gains the source line" "$(unit_source)" "box"
-t_eq "...and is NOT restarted for it" "$(restarts)" "0"
-reset; box 2 3880000; legacy_unit medium; touch "$T/active"; echo medium > "$T/loaded"
+t_eq "a unit someone set to base by hand stays base" "$(unit_model)" "base"
+t_eq "...is NOT restarted for gaining its source line" "$(restarts)" "0"
+reset; legacy_unit medium; touch "$T/active"; echo medium > "$T/loaded"
 apply
 t_eq "a unit someone set by hand (medium) is kept" "$(unit_model)" "medium"
 t_eq "...and remembered as kept" "$(unit_source)" "kept"
 t_eq "...no restart" "$(restarts)" "0"
+reset; mkdir -p "$T/state"; printf 'whisper_model=small\n' > "$CFG"; legacy_unit small; touch "$T/active"; echo small > "$T/loaded"
+apply
+t_eq "an owner's whisper_model=small survives the nightly" "$(unit_model) $(unit_source)" "small owner"
+t_eq "...no restart" "$(restarts)" "0"
+printf 'whisper_model=auto\n' > "$CFG"; apply
+t_eq "an owner's auto goes back to the default" "$(unit_model) $(unit_source)" "base default"
 
-echo "== a resized box follows its new size, unless a person chose =="
-reset; box 2 3880000; setup; touch "$T/active"; unit_model > "$T/loaded"
-box 4 7800000; apply
-t_eq "Start → Start Plus: base becomes small" "$(unit_model)" "small"
-box 2 3880000; apply
-t_eq "...and back down: small becomes base" "$(unit_model)" "base"
+echo "== the step that applies a choice says so when the service never comes back on it =="
+reset; printf 'whisper_model=small\n' > "$CFG"; legacy_unit base; touch "$T/active"; echo base > "$T/loaded"
+cp "$T/bin/curl" "$T/curl.real"
+printf '#!/usr/bin/env bash\nprintf "{\\"model\\": \\"stale\\"}\\n"\n' > "$T/bin/curl"
+apply; rc=$?
+t_eq "rc is non-zero" "$([[ $rc -ne 0 ]] && echo nonzero || echo zero)" "nonzero"
+t_has "...and it names where to look" "$(cat "$T/out")" "journalctl -u whisper-service"
+cp "$T/curl.real" "$T/bin/curl"
 
+if [[ $EUID -ne 0 ]]; then
+  echo "== the owner's switch: SKIPPED, not root — \`config set\` refuses a non-root caller by design; run: sudo -E bash $0"
+else
 echo "== the owner's switch: 5dive voice config set whisper_model =="
-reset; box 2 3880000; setup; touch "$T/active"; unit_model > "$T/loaded"
+reset; mem 3880000; setup; touch "$T/active"; unit_model > "$T/loaded"
 out=$("$VOICE" config set whisper_model small 2>&1); rc=$?
 t_eq "set small on a 4 GB box → rc 0" "$rc" "0"
 t_eq "...the config records the owner's choice" "$(grep '^whisper_model=' "$CFG")" "whisper_model=small"
 t_eq "...the unit loads it, as the owner's" "$(unit_model) $(unit_source)" "small owner"
 t_eq "...and /health reports it" "$(curl -s x | jq -r .model)" "small"
 t_has "...and the owner is told" "$out" "hears on small"
-apply
-t_eq "a later nightly keeps the owner's small on a Start box" "$(unit_model)" "small"
 t_eq "get answers it" "$("$VOICE" config get whisper_model 2>/dev/null)" "small"
 out=$("$VOICE" config set whisper_model base 2>&1); rc=$?
 t_eq "set base → rc 0" "$rc" "0"
 t_eq "...switches both ways" "$(curl -s x | jq -r .model)" "base"
-box 4 7800000; "$VOICE" config set whisper_model auto >/dev/null 2>&1
-t_eq "auto goes back to the box's rule (here: small)" "$(unit_model) $(unit_source)" "small box"
+"$VOICE" config set whisper_model auto >/dev/null 2>&1
+t_eq "auto goes back to the default" "$(unit_model) $(unit_source)" "base default"
 t_eq "...and the form reads auto" "$("$VOICE" config --json | jq -r .values.whisper_model)" "auto"
 
 echo "== below the memory floor, small is refused =="
-box 2 1900000; cp "$CFG" "$T/cfg.before"
+mem 1900000; cp "$CFG" "$T/cfg.before"
 out=$("$VOICE" config set whisper_model small 2>&1); rc=$?
 t_eq "a 2 GB box refuses small (rc 1)" "$rc" "1"
 t_has "...with the reason" "$out" "needs about"
 t_eq "...and nothing was written" "$(cmp -s "$CFG" "$T/cfg.before" && echo same)" "same"
 "$VOICE" config set whisper_model large >/dev/null 2>&1
 t_eq "a model the form does not offer is refused (rc 2)" "$?" "2"
-
-echo "== the switch says so when the service never comes back on the new model =="
-box 4 7800000; "$VOICE" config set whisper_model base >/dev/null 2>&1
-printf '#!/usr/bin/env bash\nprintf "{\\"model\\": \\"stale\\"}\\n"\n' > "$T/bin/curl"
-out=$("$VOICE" config set whisper_model small 2>&1); rc=$?
-t_eq "rc is non-zero" "$([[ $rc -ne 0 ]] && echo nonzero || echo zero)" "nonzero"
-t_has "...and it names where to look" "$out" "journalctl -u whisper-service"
+mem 3880000
 
 echo "== no service on the box: the choice is kept for when there is one =="
-reset; box 2 3880000
+reset
 out=$("$VOICE" config set whisper_model small 2>&1); rc=$?
 t_eq "rc 0" "$rc" "0"
 t_eq "...no unit is invented" "$([[ -e "$T/unit" ]] && echo present || echo absent)" "absent"
 setup
 t_eq "...and setup then loads the owner's model" "$(unit_model) $(unit_source)" "small owner"
+fi
 
 echo "== the agent's guidance: offer the accurate model, warn it is slower =="
 # The rendered section, not the installer's source: what an agent on the box
@@ -172,7 +178,7 @@ echo "== the agent's guidance: offer the accurate model, warn it is slower =="
 # release appended below it stays.
 MD="$T/CLAUDE.md"
 printf '# host\n\n<!-- 5dive-setup-voice: voice section v6 -->\n# Voice\n- old\n<!-- /5dive-setup-voice: voice section -->\n\n# Later section\n' > "$MD"
-CLAUDE_MD="$MD" "$INSTALLER" claudemd >/dev/null 2>&1
+CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
 sec=$(sed -n '/voice section v7 -->/,/\/5dive-setup-voice: voice section/p' "$MD")
 t_has "a v6 box gets the v7 section" "$sec" "voice section v7"
 t_no  "...the v6 one is gone" "$(cat "$MD")" "voice section v6"
@@ -183,7 +189,7 @@ t_has "...warns that hearing will be slower" "$sec" "2-3 times slower"
 t_has "...with the exact switch" "$sec" "sudo 5dive voice config set whisper_model small"
 t_has "...only on the owner's yes" "$sec" "Switch only after they say yes"
 t_has "the reverse: hearing too slow → offer base" "$sec" "whisper_model base"
-CLAUDE_MD="$MD" "$INSTALLER" claudemd >/dev/null 2>&1
+CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
 t_eq "a second run does not append it twice" "$(grep -c 'voice section v7' "$MD")" "1"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

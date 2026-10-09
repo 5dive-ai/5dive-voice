@@ -86,11 +86,11 @@ language on this box" below. A running `whisper-service` is now restarted onto
 new code when setup or the nightly changes it; before, it kept the code it was
 first installed with.
 
-Which whisper model hears follows the box (1.9.0, DIVE-5897): `base` on a box
-with 2 CPUs or under 6 GB of memory, `small` on a bigger one. It used to be
-`small` everywhere, which took 9-12 s on a 2-vCPU / 4 GB box where `base` takes
-3-4 s. An owner switches it with `sudo 5dive voice config set whisper_model`,
-see "Hearing speed and language on this box" below.
+Hearing loads whisper `base` by default on every box (1.9.0, DIVE-5897). It
+used to be `small`, which took 9-12 s on a 2-vCPU / 4 GB box where `base` takes
+3-4 s, and still 6-8 s on a much bigger one. `small` is now the owner's opt-in
+for accuracy: `sudo 5dive voice config set whisper_model small`, see "Hearing
+speed and language on this box" below.
 
 ## What the voice runtime actually is
 
@@ -182,14 +182,13 @@ Which model hears (1.9.0, DIVE-5897):
 ```
 sudo 5dive voice config set whisper_model small   # more accurate, about 2-3x slower
 sudo 5dive voice config set whisper_model base    # the fast one
-sudo 5dive voice config set whisper_model auto    # back to the box's default
+sudo 5dive voice config set whisper_model auto    # back to the default, base
 ```
 
-`auto` (or unset) is `base` on a box with 2 CPUs or under 6 GB of memory and
-`small` on a bigger one, read from the box itself (`nproc`, `MemTotal`), so it
-needs no plan name. Setup, the nightly and a resize re-apply it; a model an owner
-chose, one set with `WHISPER_MODEL=` for a run of the installer, or one set by
-hand in the unit before 1.9.0 is kept. Setting it rewrites the
+`auto` (or unset) is `base`. Setup and the nightly re-apply it, so a box still on
+the old default `small` moves to `base`; a model an owner chose, one set with
+`WHISPER_MODEL=` for a run of the installer, or one set by hand in the unit
+before 1.9.0 is kept. Setting it rewrites the
 `whisper-service` unit, restarts the service and waits until `/health` answers
 with the new model. `small` is refused on a box with under ~3 GB of memory: it
 peaks at about 0.8 GB while it hears. The agent's Voice section tells it to
