@@ -37,8 +37,8 @@ run() { VOICE_LIB="$LIB" "$VOICE" "$@"; }
 echo "== the declaration the dashboard draws its form from =="
 t_eq "settings are reached through a verb this plugin actually declares" \
   "$(jq -r '.fivedive.settings.verb as $v | [.fivedive.verbs[].name] | index($v) != null' "$M")" "true"
-t_eq "the seven knobs are declared, backend first" \
-  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_backend,stt_language,stt_fast,stt_model,tts_model,tts_voice"
+t_eq "the eight knobs are declared, backend first" \
+  "$(jq -r '[.fivedive.settings.fields[].key] | join(",")' "$M")" "backend,stt_backend,whisper_model,stt_language,stt_fast,stt_model,tts_model,tts_voice"
 t_eq "every field carries a key, a label and a known type" \
   "$(jq -r '[.fivedive.settings.fields[] | (.key|type)=="string" and (.label|type)=="string" and (.type=="enum" or .type=="string")] | all' "$M")" "true"
 t_eq "every enum names its options" \
@@ -70,7 +70,7 @@ t_eq "...ok:true" "$(jq -r '.ok' <<<"$out")" "true"
 t_eq "...backend local" "$(jq -r '.values.backend' <<<"$out")" "local"
 t_eq "...the engine's default hearing model" "$(jq -r '.values.stt_model' <<<"$out")" "openai/whisper-large-v3-turbo"
 t_eq "...the engine's default voice" "$(jq -r '.values.tts_voice' <<<"$out")" "alloy"
-t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice"
+t_eq "...every declared key and nothing else" "$(jq -r '.values | keys | join(",")' <<<"$out")" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice,whisper_model"
 t_eq "...and no notices" "$(jq -r '.notices | length' <<<"$out")" "0"
 # DIVE-5869: unset, hearing detects the language and uses five beams; the form
 # must show exactly that, and its defaults must be the manifest's.
@@ -90,7 +90,7 @@ echo "== the dispatcher's JSON mode, with --json already stripped (DIVE-4985) ==
 out=$(FIVEDIVE_JSON_MODE=1 run config 2>/dev/null); rc=$?
 t_eq "FIVEDIVE_JSON_MODE=1 with no flag → rc=0" "$rc" "0"
 t_eq "...answers the JSON object the form parses" "$(jq -r '.ok' <<<"$out" 2>/dev/null)" "true"
-t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice"
+t_eq "...with every declared key" "$(jq -r '.values | keys | join(",")' <<<"$out" 2>/dev/null)" "backend,stt_backend,stt_fast,stt_language,stt_model,tts_model,tts_voice,whisper_model"
 out=$(FIVEDIVE_JSON_MODE=1 VOICE_LIB="$T/absent.sh" "$VOICE" config 2>/dev/null)
 t_eq "...and without the engine it still says why, in JSON" "$(jq -r '.reason' <<<"$out" 2>/dev/null)" "engine_missing"
 t_has "FIVEDIVE_JSON_MODE=0 (the dispatcher's default) keeps the plain form" "$(FIVEDIVE_JSON_MODE=0 run config 2>/dev/null)" "backend=local"
