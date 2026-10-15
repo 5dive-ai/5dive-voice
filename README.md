@@ -2,6 +2,8 @@
 
 Speak to your agent and hear it talk back.
 
+**Docs: [5dive.ai/docs/5dive-voice](https://5dive.ai/docs/5dive-voice)**
+
 **By default, hearing runs on your own box and the audio never leaves it.**
 Speaking is the half that was never local, and this README used to say
 otherwise: the local voice is `edge-tts`, an unofficial client for Microsoft's
