@@ -125,6 +125,7 @@ echo "== the pip step holds PyAV below 19 (2026-10-02) =="
 # with av unpinned every transcribe on a fresh box 500s.
 pipline=$(grep -E 'pip" install .*faster-whisper' "$INSTALLER")
 t_has "the faster-whisper install pins av<19" "$pipline" "'av<19'"
+t_has "...and floors edge-tts at 7.3.1, the first release Microsoft accepts after 2026-10-17's token rotation (DIVE-6436)" "$pipline" "'edge-tts>=7.3.1'"
 
 echo "== the agent section asks for a voice reply only when the user spoke (DIVE-5397) =="
 # v4 said "ALWAYS send the text reply first ... then the voice attachment", so
@@ -185,7 +186,7 @@ calls="$(cat "$VF/calls.log" 2>/dev/null)"
 t_eq  "A VENV DIRECTORY WITH NO pip IS REBUILT: step_pip exits 0" "$rc" "0"
 t_has "...python3-venv is installed first" "$calls" "apt-get install -y -qq python3-venv"
 t_has "...the venv is recreated over the half-made directory" "$calls" "python3 -m venv --clear $VF/venv"
-t_has "...and faster-whisper is installed into it" "$calls" "pip install --quiet --upgrade faster-whisper edge-tts av<19"
+t_has "...and faster-whisper is installed into it" "$calls" "pip install --quiet --upgrade faster-whisper edge-tts>=7.3.1 av<19"
 # A venv whose python works but whose pip is gone gets pip back in place, and
 # keeps whatever is installed in it.
 rm -rf "$VF/venv"; mkdir -p "$VF/venv/bin"; cp "$VF/venvpython" "$VF/venv/bin/python"; touch "$VF/venv/kept"
