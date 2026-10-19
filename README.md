@@ -197,6 +197,15 @@ peaks at about 0.8 GB while it hears. The agent's Voice section tells it to
 offer `small` when a note was misheard (warning that it is slower) and `base`
 when hearing is slow, and to switch only on the owner's yes.
 
+### Voice notes from the web chat
+
+`5dive voice hear <path>` hears one note and prints its transcript
+(`{ok, data: {text}}` in JSON mode). The web chat (my.5dive.ai) lands a note
+under `/home/claude/chat-uploads/<agent>/` and calls it over the dashboard's
+exec route, so the message goes with its words and the agent never decodes a
+file first. It runs `5dive-transcribe` as `claude`, with the same backend as a
+Telegram note, and refuses any path that is not a regular file under that root.
+
 ### Models
 
 Only read when the backend is `openrouter`. Set them with the verb rather than
