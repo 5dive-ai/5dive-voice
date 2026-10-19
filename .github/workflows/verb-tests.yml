@@ -164,3 +164,27 @@ jobs:
           fi
           cp /tmp/lib.orig voice/lib/voice-backend.sh
           echo "negative control held"
+
+  # DIVE-6544. `5dive voice hear <path>` is how the web chat gets a voice
+  # note's transcript, over the exec route that runs as root. The arm that
+  # matters is the confinement: root hears only a regular file under the
+  # uploads root, never a path a browser named elsewhere.
+  hear:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the hear battery parses
+        run: bash -n tests/verb-hear.test.sh
+      - name: hear answers an envelope and stays inside the uploads root (DIVE-6544)
+        run: bash tests/verb-hear.test.sh
+      # NEGATIVE CONTROL: drop the confinement. The battery must go RED.
+      - name: ...and it goes RED on a verb that hears any path
+        run: |
+          cp voice/bin/voice /tmp/voice.orig
+          perl -0pi -e 's/\[\[ "\$real" == "\$root"\/\* && -f "\$real" && ! -L "\$path" \]\]/[[ -e "\$real" ]]/' voice/bin/voice
+          grep -q '"\$root"/\*' voice/bin/voice && { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if bash tests/verb-hear.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on a verb that hears any path — it grades nothing"; cp /tmp/voice.orig voice/bin/voice; exit 1
+          fi
+          cp /tmp/voice.orig voice/bin/voice
+          echo "negative control held"
