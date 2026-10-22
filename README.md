@@ -2,6 +2,8 @@
 
 Speak to your agent and hear it talk back.
 
+In the 5dive web chat, turn on hands-free and tap once: it keeps listening, so you just talk.
+
 **Docs: [5dive.ai/docs/5dive-voice](https://5dive.ai/docs/5dive-voice)**
 
 **By default, hearing runs on your own box and the audio never leaves it.**
