@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "voice",
-      "description": "Speak with your agent and hear it talk back. Hearing runs on your own box by default; an optional OpenRouter backend trades that privacy for accuracy. The reference implementation of the 5dive plugin contract: a channel-capability plugin, the shape every later channel plugin copies.",
+      "description": "Speak with your agent and hear it talk back. In the 5dive web chat, turn on hands-free and tap once: it keeps listening, so you just talk. Hearing runs on your own box by default; an optional OpenRouter backend trades that privacy for accuracy. The reference implementation of the 5dive plugin contract: a channel-capability plugin, the shape every later channel plugin copies.",
       "category": "channel",
       "source": "./voice",
       "homepage": "https://github.com/5dive-ai/5dive-voice"
