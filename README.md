@@ -96,6 +96,15 @@ used to be `small`, which took 9-12 s on a 2-vCPU / 4 GB box where `base` takes
 for accuracy: `sudo 5dive voice config set whisper_model small`, see "Hearing
 speed and language on this box" below.
 
+A Telegram voice note is heard in its chat's language (1.11.0, DIVE-6872). Left
+to guess, whisper `base` heard a noisy two-second Russian «да, давай» as "That,
+that way."; told the language, it heard it word for word. When the owner has
+not set `stt_language`, `5dive-transcribe` now reads the language the telegram
+plugin keeps for the chat (`lite-lang`, beside the note's `inbox/`) and passes
+it on, if it is anything other than English. The owner's `stt_language` still
+wins, `auto` included, and `5dive-transcribe --lang=<code>|auto` overrides both
+for one call.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
