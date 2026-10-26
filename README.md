@@ -96,6 +96,11 @@ used to be `small`, which took 9-12 s on a 2-vCPU / 4 GB box where `base` takes
 for accuracy: `sudo 5dive voice config set whisper_model small`, see "Hearing
 speed and language on this box" below.
 
+`sudo 5dive voice setup` prints one line per step and the result (1.11.1,
+DIVE-7034); everything apt, pip and systemd print goes to
+`/var/log/5dive-voice-setup.log`, and `--verbose` prints it all here instead. A
+step that fails prints its error and the end of that log.
+
 A Telegram voice note is heard in its chat's language (1.11.0, DIVE-6872). Left
 to guess, whisper `base` heard a noisy two-second Russian «да, давай» as "That,
 that way."; told the language, it heard it word for word. When the owner has
@@ -336,7 +341,7 @@ how the rule ends up meaning nothing for the tenth.
   "contract": "1",
   "capabilities": ["channel", "verb"],
   "verbs": [{"name": "voice", "summary": "talk to your agent by voice; pick where hearing and speaking run", "installs": "channel"}],
-  "grants": ["audio-io", "telegram-token"],
+  "grants": ["audio-io"],
   "trust": {"publisher": "5dive", "did": "did:key:5dive", "review": "official"}
 }
 ```
@@ -351,7 +356,9 @@ how the rule ends up meaning nothing for the tenth.
   command has had its chance — so a plugin cannot take `5dive task` from you.
 - **`grants`** is the consent list, not documentation. `plugin add` prints it
   back in plain English ("your microphone and speakers") and will not install
-  until you agree.
+  until you agree. So it names only what voice actually uses: it never reads a
+  Telegram bot token (the telegram plugin downloads the note), and until 1.11.1
+  the screen still listed one, on boxes with no Telegram at all (DIVE-7034).
 - **`trust.review: "official"`** is what makes voice installable today.
 - **`version`** is not cosmetic. The install path is keyed on it
   (`…/5dive/plugins/cache/<marketplace>/voice/1.0.0/`), so **a change that does not bump
