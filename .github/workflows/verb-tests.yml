@@ -16,6 +16,7 @@ on:
       - 'tests/verb-setup.test.sh'
       - 'tests/verb-config.test.sh'
       - 'tests/whisper-model.test.sh'
+      - 'tests/quiet-setup.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -28,6 +29,7 @@ on:
       - 'tests/verb-setup.test.sh'
       - 'tests/verb-config.test.sh'
       - 'tests/whisper-model.test.sh'
+      - 'tests/quiet-setup.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -169,6 +171,28 @@ jobs:
   # note's transcript, over the exec route that runs as root. The arm that
   # matters is the confinement: root hears only a regular file under the
   # uploads root, never a path a browser named elsewhere.
+  # DIVE-7034. `sudo 5dive voice setup` prints one line per step; the rest goes
+  # to a log, and a failure is printed in full.
+  quiet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the quiet battery parses
+        run: bash -n tests/quiet-setup.test.sh
+      - name: a run prints one line per step, a failure in full, and no row id
+        run: bash tests/quiet-setup.test.sh
+      # NEGATIVE CONTROL: an installer that never goes quiet must turn it RED.
+      - name: ...and it goes RED on an installer that prints everything
+        run: |
+          cp voice/bin/5dive-setup-voice /tmp/setup.orig
+          sed -i 's/^  \[\[ -n "\$verbose" \]\] || quiet_start "\$cmd"$/  true/' voice/bin/5dive-setup-voice
+          grep -q 'quiet_start "\$cmd"' voice/bin/5dive-setup-voice && { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if bash tests/quiet-setup.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on an installer that is never quiet — it grades nothing"; cp /tmp/setup.orig voice/bin/5dive-setup-voice; exit 1
+          fi
+          cp /tmp/setup.orig voice/bin/5dive-setup-voice
+          echo "negative control held: the battery goes red on the loud installer"
+
   hear:
     runs-on: ubuntu-latest
     steps:

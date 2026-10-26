@@ -55,6 +55,12 @@ t_no "the version is bumped past the release that shipped no installer" "$(jq -r
 t_no "...and past the one before it" "$(jq -r '.version' "$M")" "1.0.0"
 t_has "the hint tells the reader the installer comes with the plugin" "$(jq -r '.fivedive.setup.hint' "$M")" "ships the installer"
 
+# DIVE-7034: the consent screen listed "your Telegram bot token" on a box with no
+# Telegram. Voice never reads one (the telegram plugin downloads the note), so a
+# grant for it is a promise on the screen that nothing keeps.
+t_no "the manifest does not ask for a Telegram bot token" "$(jq -c '.fivedive.grants' "$M")" "telegram-token"
+t_eq "...and nothing in the plugin reads one" "$(grep -rlE 'TELEGRAM_BOT_TOKEN|telegram-[a-z$]*\.env' "$ROOT/voice" | wc -l)" "0"
+
 echo "== the verb routes setup to the sibling installer =="
 out=$("$VOICE" setup --help 2>&1); rc=$?
 t_eq "'voice setup' is a known subcommand, not exit 64" "$rc" "0"
