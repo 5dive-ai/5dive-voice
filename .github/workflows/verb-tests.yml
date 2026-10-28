@@ -17,6 +17,7 @@ on:
       - 'tests/verb-config.test.sh'
       - 'tests/whisper-model.test.sh'
       - 'tests/quiet-setup.test.sh'
+      - 'tests/verb-as-root.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -30,6 +31,7 @@ on:
       - 'tests/verb-config.test.sh'
       - 'tests/whisper-model.test.sh'
       - 'tests/quiet-setup.test.sh'
+      - 'tests/verb-as-root.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -73,6 +75,10 @@ jobs:
         run: bash -n tests/verb-config.test.sh
       - name: config reads, validates and writes atomically (DIVE-4875)
         run: sudo -E bash tests/verb-config.test.sh
+      # DIVE-7172: the non-root paths. As root the battery re-runs itself as
+      # nobody, so CI grades what an agent seat actually hits.
+      - name: an agent with the grant changes a setting without typing sudo; one without is told who can
+        run: sudo -E bash tests/verb-as-root.test.sh
       # NEGATIVE CONTROL: cut the string-value check out of the verb. The battery
       # must go RED, or it is not grading the refusal it claims to.
       - name: ...and it goes RED on a verb that drops the string-value check

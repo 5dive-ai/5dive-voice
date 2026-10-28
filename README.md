@@ -158,8 +158,12 @@ what you are deciding is whether your voice notes go to a vendor.
 is the design, not an oversight: which backend is in force is something every
 seat's transcribe wrapper reads on every utterance, while *changing* it decides
 whether this box's audio leaves it — the same class of act as `sudo
-5dive voice setup` itself. A non-root seat gets the `sudo` line, never a
-half-applied change.
+5dive voice setup` itself. An agent that holds the grant (an admin seat) can
+leave the `sudo` off: the verb asks sudo, without running anything, whether this
+exact command is allowed, and re-runs it through `sudo -n` (1.11.2). An agent
+without the grant is refused with the name of a colleague on the box who has
+it and the message to send them, never told to hand its owner a command; the
+owner has no terminal (DIVE-7172). Never a half-applied change either way.
 
 ### The key
 
