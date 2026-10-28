@@ -56,14 +56,15 @@ chmod +x "$T/sudo" "$T/5dive"
 
 cat > "$T/agents-team.json" <<'EOF'
 {"ok":true,"data":[
- {"name":"ann","active":true,"sudo":{"impliedIsolation":"standard"}},
- {"name":"gone","active":false,"sudo":{"impliedIsolation":"admin"}},
- {"name":"marcus","active":true,"sudo":{"impliedIsolation":"admin"}},
- {"name":"bob","active":true,"sudo":{"impliedIsolation":"standard"}}
+ {"name":"gone","active":"inactive","sudo":{"impliedIsolation":"admin"}},
+ {"name":"broke","active":"failed","sudo":{"impliedIsolation":"beyond-admin"}},
+ {"name":"ann","active":"active","sudo":{"impliedIsolation":"standard"}},
+ {"name":"marcus","active":"active","sudo":{"impliedIsolation":"admin"}},
+ {"name":"bob","active":"active","sudo":{"impliedIsolation":"standard"}}
 ]}
 EOF
 cat > "$T/agents-alone.json" <<'EOF'
-{"ok":true,"data":[{"name":"ann","active":true,"sudo":{"impliedIsolation":"standard"}}]}
+{"ok":true,"data":[{"name":"ann","active":"active","sudo":{"impliedIsolation":"standard"}}]}
 EOF
 
 run() {
@@ -87,7 +88,8 @@ t_eq "refused" "$rc" "1"
 t_eq "...sudo was only asked, never run" "$(grep -c '^run ' "$LOG")" "0"
 t_has "...says the owner has no terminal" "$out" "they have no terminal"
 t_has "...names the active admin colleague" "$out" "(marcus)"
-t_no "...not the inactive one" "$out" "gone"
+t_no "...not the inactive one listed before it" "$out" "gone"
+t_no "...nor a failed one" "$out" "broke"
 t_no "...nor a standard one" "$out" "bob"
 t_has "...and hands over the message to send" "$out" "5dive agent send marcus \"My owner asked to change a voice setting. Please run: sudo 5dive voice config set stt_language ru\""
 t_eq "...and nothing was written" "$([[ -f "$CFG" ]] && echo wrote || echo clean)" "clean"
@@ -96,6 +98,15 @@ t_has "with no admin colleague, the owner is pointed at the app, not a command" 
 out=$(run no team backend openrouter 2>&1); rc=$?
 t_eq "the backend switch is refused the same way" "$rc" "1"
 t_has "...with its own command in the message" "$out" "Please run: sudo 5dive voice backend openrouter"
+
+echo "== a box's first config (config init) takes the same two paths =="
+out=$(run yes team config init stt_language=ru 2>&1); rc=$?
+t_eq "init by a seat with the grant succeeds" "$rc" "0"
+t_eq "...re-run through sudo -n" "$(tail -1 "$LOG")" "run $T/5dive voice config init stt_language=ru"
+out=$(run no team config init stt_language=ru 2>&1); rc=$?
+t_eq "init by a seat without it is refused" "$rc" "1"
+t_has "...naming the colleague, not a command for the owner" "$out" "5dive agent send marcus"
+t_no "...and never the old 'Run: sudo' line" "$out" "Run: sudo"
 
 echo "== a bad value is refused before sudo is even asked =="
 out=$(run yes team config set stt_language russian 2>&1); rc=$?
