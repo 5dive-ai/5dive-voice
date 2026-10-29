@@ -89,11 +89,12 @@ speak_local() {
   mp3="$(mktemp --suffix=.mp3 /tmp/5dive-speak.XXXXXX)"
   # DIVE-7247: Microsoft's service drops calls in bursts (NoAudioReceived on 1
   # of 8 back-to-back runs, then every reply for three minutes), and one try
-  # lost the voice note. Try 3 times, 1 s then 2 s apart (VOICE_EDGE_BACKOFF,
-  # for tests), and keep the error.
+  # lost the voice note. Try 6 times, 1, 2, 4, 8 and 8 s apart (VOICE_EDGE_BACKOFF):
+  # live runs of 4 and 5 failures lasted ~18 s, and 3 tries covered only ~13 s.
+  # Keep the error.
   local err tries=0 ok=0 wait last
   err="$(mktemp /tmp/5dive-speak.XXXXXX)"
-  for wait in ${VOICE_EDGE_BACKOFF-1 2} stop; do
+  for wait in ${VOICE_EDGE_BACKOFF-1 2 4 8 8} stop; do
     tries=$((tries + 1))
     edge-tts --voice "$voice" --text "$TEXT" --write-media "$mp3" >/dev/null 2>"$err" && [[ -s "$mp3" ]] && { ok=1; break; }
     [[ "$wait" == stop ]] && break

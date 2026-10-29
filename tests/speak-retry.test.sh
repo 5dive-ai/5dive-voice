@@ -5,8 +5,10 @@
 # edge-tts once, threw its error away and told the agent the paid backend was
 # "the supported path". These arms grade the local half with stand-ins for
 # edge-tts and ffmpeg: a service that fails twice and then answers gives a voice
-# note; one that never answers fails after exactly 3 tries, says why, and does
-# not send the owner to paid voice as the fix.
+# note, and so does one that fails 5 times (the live bursts ran 4-5 failures);
+# one that never answers fails after exactly 6 tries, 1, 2, 4, 8 and 8 s apart,
+# says why, and does not send the owner to paid voice as the fix. A `sleep`
+# stand-in records the waits, so the shipped default backoff is what is graded.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,12 +41,17 @@ cat > "$T/bin/ffmpeg" <<'STUB'
 #!/usr/bin/env bash
 printf 'OggS-fake' > "${@: -1}"
 STUB
-chmod +x "$T/bin/edge-tts" "$T/bin/ffmpeg"
+# sleep stand-in: records each wait instead of taking it.
+cat > "$T/bin/sleep" <<STUB
+#!/usr/bin/env bash
+printf '%s ' "\$1" >> "$T/waits"
+STUB
+chmod +x "$T/bin/edge-tts" "$T/bin/ffmpeg" "$T/bin/sleep"
 
 speak() {
-  : > "$T/calls"; rm -f "$T/out.ogg"
+  : > "$T/calls"; : > "$T/waits"; rm -f "$T/out.ogg"
   PATH="$T/bin:$PATH" VOICE_LIB="$ROOT/voice/lib/voice-backend.sh" \
-    VOICE_CONFIG="$T/none" VOICE_PLUGINS_JSON="$T/none.json" VOICE_EDGE_BACKOFF="0 0" \
+    VOICE_CONFIG="$T/none" VOICE_PLUGINS_JSON="$T/none.json" \
     bash "$SPEAK" --backend=local --voice=ru-RU-DmitryNeural --out="$T/out.ogg" "Привет, это проверка."
 }
 
@@ -52,6 +59,16 @@ echo "== the service fails twice, then answers =="
 out=$(EDGE_FAILS=2 speak 2>"$T/err"); rc=$?
 t_eq "rc 0" "$rc" "0"
 t_eq "edge-tts was called 3 times" "$(cat "$T/calls")" "3"
+t_eq "the .ogg path is printed" "$out" "$T/out.ogg"
+[[ -s "$T/out.ogg" ]] && t_ok "the .ogg was written" || t_fail "the .ogg was written"
+t_eq "nothing on stderr" "$(cat "$T/err")" ""
+
+t_eq "it waited 1 s, then 2 s" "$(cat "$T/waits")" "1 2 "
+
+echo "== the service fails 5 times, then answers =="
+out=$(EDGE_FAILS=5 speak 2>"$T/err"); rc=$?
+t_eq "rc 0" "$rc" "0"
+t_eq "edge-tts was called 6 times" "$(cat "$T/calls")" "6"
 t_eq "the .ogg path is printed" "$out" "$T/out.ogg"
 [[ -s "$T/out.ogg" ]] && t_ok "the .ogg was written" || t_fail "the .ogg was written"
 t_eq "nothing on stderr" "$(cat "$T/err")" ""
@@ -65,11 +82,12 @@ echo "== NEGATIVE CONTROL: the service never answers =="
 out=$(EDGE_FAILS=99 speak 2>"$T/err"); rc=$?
 err=$(cat "$T/err")
 [[ "$rc" != 0 ]] && t_ok "rc non-zero ($rc)" || t_fail "rc non-zero" "got 0"
-t_eq "edge-tts was called exactly 3 times" "$(cat "$T/calls")" "3"
+t_eq "edge-tts was called exactly 6 times" "$(cat "$T/calls")" "6"
+t_eq "it waited 1, 2, 4, 8 and 8 s between them (~23 s)" "$(cat "$T/waits")" "1 2 4 8 8 "
 t_eq "no path printed" "$out" ""
 [[ ! -e "$T/out.ogg" || ! -s "$T/out.ogg" ]] && t_ok "no .ogg written" || t_fail "no .ogg written"
 t_has "the message carries edge-tts's own last error line" "$err" "edge_tts.exceptions.NoAudioReceived: No audio was received"
-t_has "the message says the tries" "$err" "failed 3 times"
+t_has "the message says the tries" "$err" "failed 6 times"
 t_has "the message says it is for now" "$err" "failing for now"
 t_has "paid voice is named as an option" "$err" "paid OpenRouter voice is an option"
 t_no "paid voice is not called the supported path" "$err" "supported path"

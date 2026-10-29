@@ -112,8 +112,8 @@ for one call.
 
 A voice reply survives a short outage of Microsoft's free voice service (1.11.3,
 DIVE-7247). The service drops calls in bursts, and `5dive-speak` used to try
-once, so one dropped call lost the voice note. It now tries 3 times, 1 s and
-2 s apart. If all 3 fail, it prints the service's own error and says the
+once, so one dropped call lost the voice note. It now tries 6 times, 1, 2, 4,
+8 and 8 s apart (about 23 s of waiting). If all 6 fail, it prints the service's own error and says the
 outage is for now; the paid OpenRouter voice is offered as an option, not as
 the fix.
 
