@@ -18,6 +18,7 @@ on:
       - 'tests/whisper-model.test.sh'
       - 'tests/quiet-setup.test.sh'
       - 'tests/verb-as-root.test.sh'
+      - 'tests/speak-retry.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -32,6 +33,7 @@ on:
       - 'tests/whisper-model.test.sh'
       - 'tests/quiet-setup.test.sh'
       - 'tests/verb-as-root.test.sh'
+      - 'tests/speak-retry.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -217,4 +219,27 @@ jobs:
             echo "the battery passed on a verb that hears any path — it grades nothing"; cp /tmp/voice.orig voice/bin/voice; exit 1
           fi
           cp /tmp/voice.orig voice/bin/voice
+          echo "negative control held"
+
+  # DIVE-7247. Microsoft's free voice service drops calls in bursts; one try
+  # lost the voice note and the error sent owners to paid voice. 5dive-speak
+  # retries edge-tts 6 times (1, 2, 4, 8, 8 s apart) and says why it failed. Stand-ins, so no network.
+  speak-retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the battery parses
+        run: bash -n tests/speak-retry.test.sh
+      - name: a burst of failures still gives a voice note; a dead service fails after 6 tries and says why
+        run: bash tests/speak-retry.test.sh
+      # NEGATIVE CONTROL: put the single try back. The battery must go RED.
+      - name: ...and it goes RED on a wrapper that tries edge-tts once
+        run: |
+          cp voice/lib/5dive-speak.sh /tmp/speak.orig
+          sed -i 's/for wait in ${VOICE_EDGE_BACKOFF-[^}]*} stop; do/for wait in stop; do/' voice/lib/5dive-speak.sh
+          grep -q 'for wait in stop; do' voice/lib/5dive-speak.sh || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if bash tests/speak-retry.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on a single try — it grades nothing"; cp /tmp/speak.orig voice/lib/5dive-speak.sh; exit 1
+          fi
+          cp /tmp/speak.orig voice/lib/5dive-speak.sh
           echo "negative control held"
