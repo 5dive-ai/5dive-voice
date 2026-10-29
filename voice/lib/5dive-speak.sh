@@ -24,7 +24,7 @@
 set -uo pipefail
 
 # shellcheck source=/dev/null
-. /usr/local/lib/5dive/voice-backend.sh
+. "${VOICE_LIB:-/usr/local/lib/5dive/voice-backend.sh}"
 
 OUT=""
 VOICE_OVERRIDE=""
@@ -87,11 +87,25 @@ speak_local() {
   [[ -n "$voice" ]] || voice="$VOICE_DEFAULT_EDGE_VOICE"
   voice_require_cmd edge-tts || return 1
   mp3="$(mktemp --suffix=.mp3 /tmp/5dive-speak.XXXXXX)"
-  if ! edge-tts --voice "$voice" --text "$TEXT" --write-media "$mp3" >/dev/null 2>&1; then
-    rm -f "$mp3"
-    echo "5dive voice: edge-tts failed. It is an unofficial client for Microsoft's online voices and breaks when Microsoft rotates its tokens; 'sudo 5dive voice backend openrouter' is the supported path." >&2
+  # DIVE-7247: Microsoft's service drops calls in bursts (NoAudioReceived on 1
+  # of 8 back-to-back runs, then every reply for three minutes), and one try
+  # lost the voice note. Try 3 times, 1 s then 2 s apart (VOICE_EDGE_BACKOFF,
+  # for tests), and keep the error.
+  local err tries=0 ok=0 wait last
+  err="$(mktemp /tmp/5dive-speak.XXXXXX)"
+  for wait in ${VOICE_EDGE_BACKOFF-1 2} stop; do
+    tries=$((tries + 1))
+    edge-tts --voice "$voice" --text "$TEXT" --write-media "$mp3" >/dev/null 2>"$err" && [[ -s "$mp3" ]] && { ok=1; break; }
+    [[ "$wait" == stop ]] && break
+    sleep "$wait"
+  done
+  if (( ! ok )); then
+    last=$(grep -v '^[[:space:]]*$' "$err" | tail -n1)
+    rm -f "$mp3" "$err"
+    echo "5dive voice: edge-tts failed $tries times${last:+ ($last)}. Microsoft's free voice service is failing for now, not broken for good: send this reply as text and try voice again shortly. If it keeps failing, the paid OpenRouter voice is an option: sudo 5dive voice backend openrouter." >&2
     return 1
   fi
+  rm -f "$err"
   to_ogg "$mp3"; local rc=$?; rm -f "$mp3"; return $rc
 }
 
