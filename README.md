@@ -117,6 +117,17 @@ once, so one dropped call lost the voice note. It now tries 6 times, 1, 2, 4,
 outage is for now; the paid OpenRouter voice is offered as an option, not as
 the fix.
 
+The free voice repairs itself when Microsoft changes it (1.11.4, DIVE-7409).
+Microsoft now and then changes the key its service accepts, and from then on it
+refuses every call from the old edge-tts until a newer one is installed. The
+box used to wait for its nightly update for that, and a self-hosted box with
+auto-update off never got one. Now, when a reply fails, `5dive-speak` upgrades
+edge-tts once (at most once an hour per box) and, if a newer version came in,
+speaks the reply again. A refusal is not waited out like a burst: it goes
+straight to the upgrade. Setup installs the small helper that does this,
+`/usr/local/lib/5dive/edge-tts-heal`, and one sudoers line that lets any agent
+on the box run it, with no arguments.
+
 ## What the voice runtime actually is
 
 Not a stub. `sudo 5dive voice setup` installs, on your own box:
