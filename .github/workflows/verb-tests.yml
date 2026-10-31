@@ -19,6 +19,7 @@ on:
       - 'tests/quiet-setup.test.sh'
       - 'tests/verb-as-root.test.sh'
       - 'tests/speak-retry.test.sh'
+      - 'tests/edge-heal.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
   push:
@@ -34,6 +35,7 @@ on:
       - 'tests/quiet-setup.test.sh'
       - 'tests/verb-as-root.test.sh'
       - 'tests/speak-retry.test.sh'
+      - 'tests/edge-heal.test.sh'
       - 'voice/.claude-plugin/plugin.json'
       - '.github/workflows/verb-tests.yml'
 
@@ -243,3 +245,21 @@ jobs:
           fi
           cp /tmp/speak.orig voice/lib/5dive-speak.sh
           echo "negative control held"
+      # DIVE-7409: a box heals itself when Microsoft refuses its edge-tts.
+      - name: a refused edge-tts is upgraded once and the reply retried; no loop
+        run: bash -n tests/edge-heal.test.sh && bash tests/edge-heal.test.sh
+      - name: ...and the speak arms go RED on a wrapper that never heals
+        run: |
+          cp voice/lib/5dive-speak.sh /tmp/speak.orig
+          sed -i 's/if (( ! ok )) && edge_heal; then/if false; then/' voice/lib/5dive-speak.sh
+          grep -q 'if false; then' voice/lib/5dive-speak.sh || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if bash tests/speak-retry.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on a wrapper that never heals — it grades nothing"; cp /tmp/speak.orig voice/lib/5dive-speak.sh; exit 1
+          fi
+          cp /tmp/speak.orig voice/lib/5dive-speak.sh
+          echo "negative control held"
+      - name: the sudoers line setup writes parses
+        run: |
+          line=$(sed -n 's/^ *"\(%claude ALL=(root) NOPASSWD: \)\$EDGE_HEAL_BIN \\"\\""\( > "\$tmp"\)\{0,1\}$/\1\/usr\/local\/lib\/5dive\/edge-tts-heal ""/p' voice/bin/5dive-setup-voice)
+          [ -n "$line" ] || { echo "sudoers line not found in the installer"; exit 1; }
+          printf '%s\n' "$line" > /tmp/heal.sudoers && sudo visudo -cf /tmp/heal.sudoers
