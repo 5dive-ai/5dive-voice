@@ -263,3 +263,26 @@ jobs:
           line=$(sed -n 's/^ *"\(%claude ALL=(root) NOPASSWD: \)\$EDGE_HEAL_BIN \\"\\""\( > "\$tmp"\)\{0,1\}$/\1\/usr\/local\/lib\/5dive\/edge-tts-heal ""/p' voice/bin/5dive-setup-voice)
           [ -n "$line" ] || { echo "sudoers line not found in the installer"; exit 1; }
           printf '%s\n' "$line" > /tmp/heal.sudoers && sudo visudo -cf /tmp/heal.sudoers
+
+  # DIVE-7559: local-only mode (/etc/5dive/local-only). Nothing may leave the
+  # office: speaking is off (both voices are online), hearing stays on this box,
+  # no edge-tts pip, no switch to OpenRouter. Root runs the backend-switch arm.
+  local-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the battery parses
+        run: bash -n tests/local-only.test.sh
+      - name: under local-only nothing speaks, hearing stays local, no pip, no OpenRouter
+        run: sudo -E bash tests/local-only.test.sh
+      # NEGATIVE CONTROL: take the speak gate out. The battery must go RED.
+      - name: ...and it goes RED on a wrapper that ignores local-only
+        run: |
+          cp voice/lib/5dive-speak.sh /tmp/speak.orig
+          sed -i 's/^if voice_local_only; then$/if false; then/' voice/lib/5dive-speak.sh
+          grep -q '^if false; then$' voice/lib/5dive-speak.sh || { echo "MUTATION DID NOT LAND — the arm is vacuous"; exit 1; }
+          if sudo -E bash tests/local-only.test.sh >/dev/null 2>&1; then
+            echo "the battery passed on a wrapper that speaks under local-only — it grades nothing"; cp /tmp/speak.orig voice/lib/5dive-speak.sh; exit 1
+          fi
+          cp /tmp/speak.orig voice/lib/5dive-speak.sh
+          echo "negative control held"
