@@ -125,6 +125,15 @@ once, so one dropped call lost the voice note. It now tries 6 times, 1, 2, 4,
 outage is for now; the paid OpenRouter voice is offered as an option, not as
 the fix.
 
+Local-only mode turns speaking off (1.11.6, DIVE-7559). When the box runs in
+local-only mode (`sudo 5dive config local-only on`, which writes
+`/etc/5dive/local-only`), nothing may leave the office network. Both voices are
+online services, edge-tts (Microsoft) and OpenRouter, so `5dive-speak` refuses
+with exit 3 and tells the agent to answer in text. Hearing keeps working on this
+box with local whisper, even on a box configured for OpenRouter. `edge-tts-heal`
+never runs pip, setup leaves edge-tts out, and `sudo 5dive voice backend
+openrouter` is refused. Turning the mode off restores every voice as it was.
+
 The free voice repairs itself when Microsoft changes it (1.11.4, DIVE-7409).
 Microsoft now and then changes the key its service accepts, and from then on it
 refuses every call from the old edge-tts until a newer one is installed. The
