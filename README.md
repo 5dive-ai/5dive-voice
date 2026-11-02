@@ -110,6 +110,14 @@ it on, if it is anything other than English. The owner's `stt_language` still
 wins, `auto` included, and `5dive-transcribe --lang=<code>|auto` overrides both
 for one call.
 
+OpenRouter hearing is told the note's language too (1.11.5, DIVE-7532). That
+language only ever reached the box's own whisper. On a box that hears on
+OpenRouter, whisper-large-v3-turbo guessed by itself and heard a 43 s English
+note as Korean; told `language=en`, it heard it word for word. The same
+language (`--lang`, then `stt_language`, then the chat's) now rides to
+OpenRouter as its standard `language` field. A model that refuses the field is
+asked once more without it, so a language setting never costs a note.
+
 A voice reply survives a short outage of Microsoft's free voice service (1.11.3,
 DIVE-7247). The service drops calls in bursts, and `5dive-speak` used to try
 once, so one dropped call lost the voice note. It now tries 6 times, 1, 2, 4,
