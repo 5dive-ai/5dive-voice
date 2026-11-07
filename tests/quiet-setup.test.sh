@@ -97,12 +97,47 @@ t_no "...and not the log's tail on top of it" "$out" "Selecting previously unsel
 
 echo "== a warning gets its own line =="
 WARNSTEP="$OKSTEPS"'
-step_service() { say "Step 3/6 — whisper-service"; noise; warn "whisper-service not healthy after 6min — check: journalctl -u whisper-service"; }
+step_wrapper() { say "Step 4/6 — wrappers"; noise; warn "edge-tts self-repair: the sudoers line did not validate, left out"; }
 '
 out=$(run "$WARNSTEP" all); rc=$?
 t_eq "rc 0" "$rc" "0"
-t_has "the warning is on the terminal" "$out" "! whisper-service not healthy after 6min"
+t_has "the warning is on the terminal" "$out" "! edge-tts self-repair: the sudoers line did not validate"
 t_no "...and that step is not also ticked" "$out" "✓ done"
+
+echo "== whisper never answers: the run FAILS, after the other steps (report 761) =="
+# The REAL step_service, with what it touches stubbed: systemd does nothing,
+# /health never answers, and the 6-minute poll does not sleep.
+DEADSVC="$(grep -v '^step_service()' <<<"$OKSTEPS")"'
+whisper_model_plan()     { echo "base default"; }
+install_whisper_service(){ return 1; }
+whisper_unit_model()     { echo base; }
+write_whisper_unit()     { :; }
+systemctl() { echo "systemctl $*"; return 0; }
+curl()      { echo "curl $*" >> "$CURLS"; return 7; }
+sleep()     { :; }
+'
+rm -f "$T/setup.log"; export CURLS="$T/curls"; : > "$CURLS"
+out=$(run "$DEADSVC" all); rc=$?
+t_eq "rc 1" "$rc" "1"
+t_eq "...it polled /health the full 6 minutes (180 tries)" "$(grep -c '127.0.0.1:8765/health' "$CURLS")" "180"
+t_has "...the warning is on the terminal" "$out" "! whisper-service not healthy after 6min"
+for n in 4 5 6; do t_has "...step $n/6 still ran (the model may finish later)" "$out" "Step $n/6"; done
+t_has "...the failure says voice notes cannot be heard yet" "$out" "voice notes cannot be heard yet"
+t_has "...and names where to look" "$out" "journalctl -u whisper-service"
+t_has "...and the full log" "$out" "Full log: $T/setup.log"
+t_no "...nothing claims it was set up" "$out" "Voice is set up"
+t_eq "...no internal row id" "$(grep -cE 'DIVE-[0-9]+' <<<"$out")" "0"
+out=$(run "$DEADSVC" service); rc=$?
+t_eq "the service step on its own also exits 1" "$rc" "1"
+out=$(run "$DEADSVC" all --verbose); rc=$?
+t_eq "...and so does --verbose" "$rc" "1"
+t_has "...with the reason" "$out" "voice notes cannot be heard yet"
+UPSVC="$DEADSVC"'
+curl() { return 0; }
+'
+out=$(run "$UPSVC" all); rc=$?
+t_eq "the same real step with /health answering: rc 0" "$rc" "0"
+t_has "...and it says voice is set up" "$out" "Voice is set up"
 
 echo "== one step on its own: one line, nothing else =="
 out=$(run 'step_model() { say "Hearing model"; echo "Loading \"small\"..."; ok "whisper-service hears on small"; }' model); rc=$?
