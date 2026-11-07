@@ -134,6 +134,12 @@ box with local whisper, even on a box configured for OpenRouter. `edge-tts-heal`
 never runs pip, setup leaves edge-tts out, and `sudo 5dive voice backend
 openrouter` is refused. Turning the mode off restores every voice as it was.
 
+Setup fails when the speech engine never starts (1.11.7, DIVE-7855). If
+whisper-service does not answer within 6 minutes (a model download that hangs on
+dead outbound IPv6 is the case seen), setup still installs everything else, then
+exits 1 with the reason and the log, instead of saying voice is set up. Run it
+again once the engine answers.
+
 The free voice repairs itself when Microsoft changes it (1.11.4, DIVE-7409).
 Microsoft now and then changes the key its service accepts, and from then on it
 refuses every call from the old edge-tts until a newer one is installed. The
