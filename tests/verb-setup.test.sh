@@ -140,7 +140,7 @@ echo "== the agent section asks for a voice reply only when the user spoke (DIVE
 inst=$(cat "$INSTALLER")
 t_no  "the 'ALWAYS ... voice attachment' wording is gone" "$inst" "ALWAYS send the text reply first"
 t_has "a typed message gets text only" "$inst" "a typed message gets a text reply only — no voice note"
-t_has "the section is v7, so a v4, v5 or v6 box is rewritten (DIVE-5897)" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v7 -->"'
+t_has "the section is v8, so a v4 to v7 box is rewritten (DIVE-9468)" "$inst" 'MARKER="<!-- 5dive-setup-voice: voice section v8 -->"'
 t_has "...and it names the hearing settings, so an agent points at them instead of patching the plugin (DIVE-5869)" "$inst" "sudo 5dive voice config set stt_fast 1"
 
 echo "== a venv left with no pip is rebuilt on the next run (DIVE-5614) =="
