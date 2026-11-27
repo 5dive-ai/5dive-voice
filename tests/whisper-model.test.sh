@@ -179,8 +179,8 @@ echo "== the agent's guidance: offer the accurate model, warn it is slower =="
 MD="$T/CLAUDE.md"
 printf '# host\n\n<!-- 5dive-setup-voice: voice section v6 -->\n# Voice\n- old\n<!-- /5dive-setup-voice: voice section -->\n\n# Later section\n' > "$MD"
 CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
-sec=$(sed -n '/voice section v7 -->/,/\/5dive-setup-voice: voice section/p' "$MD")
-t_has "a v6 box gets the v7 section" "$sec" "voice section v7"
+sec=$(sed -n '/voice section v8 -->/,/\/5dive-setup-voice: voice section/p' "$MD")
+t_has "a v6 box gets the v8 section" "$sec" "voice section v8"
 t_no  "...the v6 one is gone" "$(cat "$MD")" "voice section v6"
 t_has "...and the section below it stays" "$(cat "$MD")" "# Later section"
 t_has "on a misheard note, the agent offers the more accurate model" "$sec" "offer the more accurate model"
@@ -190,7 +190,23 @@ t_has "...with the exact switch" "$sec" "sudo 5dive voice config set whisper_mod
 t_has "...only on the owner's yes" "$sec" "Switch only after they say yes"
 t_has "the reverse: hearing too slow → offer base" "$sec" "whisper_model base"
 CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
-t_eq "a second run does not append it twice" "$(grep -c 'voice section v7' "$MD")" "1"
+t_eq "a second run does not append it twice" "$(grep -c 'voice section v8' "$MD")" "1"
+
+echo "== v7 to v8: the agent learns the app's Faster voice switch (DIVE-9468) =="
+printf '# host\n\n<!-- 5dive-setup-voice: voice section v7 -->\n# Voice\n- old v7 line\n<!-- /5dive-setup-voice: voice section -->\n\n# Later section\n- kept\n' > "$MD"
+CLAUDE_MD="$MD" step claudemd >/dev/null 2>&1
+sec=$(sed -n '/voice section v8 -->/,/\/5dive-setup-voice: voice section/p' "$MD")
+t_eq "a v7 box ends with exactly one v8 section" "$(grep -c 'voice section v8' "$MD")" "1"
+t_no  "...the v7 one is gone" "$(cat "$MD")" "voice section v7"
+t_no  "...with its old lines" "$(cat "$MD")" "old v7 line"
+t_eq "...one closing marker" "$(grep -c '/5dive-setup-voice: voice section' "$MD")" "1"
+t_has "...the lines below the old block survive" "$(cat "$MD")" "# Later section
+- kept"
+t_has "the v8 section names Faster voice" "$sec" "«Faster voice» switch (the chat's ⋮ menu, and Settings › Voice)"
+t_has "...on by default except in encrypted chats" "$sec" "on by default except in encrypted chats"
+t_has "...says the audio leaves for Google or Apple" "$sec" "the audio goes to Google (Android) or Apple (iPhone)"
+t_has "...slow app voice: point them to it" "$sec" "finds voice in the app slow, point them to it"
+t_has "...private: switch it off" "$sec" "stay private, tell them to switch it off"
 
 # ---- the service itself (no root) -------------------------------------------
 # whisper-service.py is run for real with a stub faster_whisper whose
